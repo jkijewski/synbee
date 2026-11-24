@@ -131,6 +131,34 @@ export interface Choices {
   devices: ChoiceDevice[];
   groups: Array<{ id: number; name: string; created: boolean; properties: Property[]; fades?: boolean }>;
   actions: Array<{ id: number; name: string }>;
+  sensorGroups?: Array<{ id: number; name: string; words: { active: string; inactive: string } }>;
+  /** The owner's temperature unit. */
+  units?: { temperature: 'C' | 'F' };
+  checks?: Array<{ id: number; name: string }>;
+}
+
+export type TileLevel = 'fine' | 'info' | 'warning' | 'alarm';
+
+export interface SensorGroup {
+  id: number;
+  name: string;
+  kind: string;
+  roomId: number | null;
+  tile: boolean;
+  labels: { active: string; inactive: string };
+  members: Array<{ ieee: string; property: string; name?: string }>;
+  status?: { value: 'none' | 'some' | 'all' | null; text: string; level: TileLevel } | null;
+}
+
+export interface Check {
+  id?: number;
+  name: string;
+  if: { mode: 'all' | 'any'; conditions: Condition[] };
+  whenTrue: { text: string; level: TileLevel };
+  whenFalse: { text: string; level: TileLevel };
+  roomId: number | null;
+  tile: boolean;
+  now?: { value: boolean; text: string; level: TileLevel; why: Array<{ text: string }> } | null;
 }
 
 export interface LightGroup {
@@ -154,13 +182,17 @@ export type Trigger =
   | { type: 'sun'; event: 'sunrise' | 'sunset'; offset: number; days: Weekday[]; random?: number }
   | { type: 'every'; minutes: number }
   | { type: 'action'; action: number }
-  | { type: 'event'; name: string };
+  | { type: 'event'; name: string }
+  | { type: 'sensors'; group: number; becomes: 'none' | 'some' | 'all'; forMinutes?: number }
+  | { type: 'check'; check: number; becomes: boolean; forMinutes?: number };
 export type Condition =
   | { type: 'state'; device: string; property: string; op: 'eq' | 'ne' | 'gt' | 'lt' | 'between'; value: unknown; forMinutes?: number }
   | { type: 'time'; from: string; to: string }
   | { type: 'days'; days: Weekday[] }
   | { type: 'sun'; is: 'dark' | 'light' }
-  | { type: 'group'; group: number; is: 'off' | 'partly' | 'on' };
+  | { type: 'group'; group: number; is: 'off' | 'partly' | 'on' }
+  | { type: 'sensors'; group: number; is: 'none' | 'some' | 'all' }
+  | { type: 'check'; check: number; is: boolean };
 export type TimedStep = { type: 'device'; device: string; values: Record<string, unknown> } | { type: 'group'; group: number; values: Record<string, unknown> };
 export type RuleStep = (
   | { type: 'device'; device: string; values: Record<string, unknown> }
@@ -211,6 +243,8 @@ export interface Action {
   order: number;
   draft: boolean;
   notes: string;
+  /** Conditions checked when the action is tapped; unmet, it doesn't run and says which (0011). */
+  if?: { mode: 'all' | 'any'; conditions: Condition[] };
   steps: Step[];
   /** What the action's tile shows in the app (0011). */
   tile?: TileShow;
@@ -223,6 +257,8 @@ export interface RunResult {
   ok: boolean;
   failedStep?: number;
   error?: string;
+  /** Set when the action's conditions weren't met, so nothing ran: what wasn't true. */
+  notRun?: string;
 }
 
 /** A device property's display name, using the channel label when there is one. */
@@ -256,6 +292,7 @@ export interface Member {
   revokedActions: number[];
   revokedRooms: number[];
   devicesWithoutRoom: boolean;
+  mayPauseAlerts?: boolean;
   phones: MemberPhone[];
   pairingUntil: number | null;
 }

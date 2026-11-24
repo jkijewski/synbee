@@ -101,7 +101,10 @@ export function StepEditor({ step: s, choices, onChange }: { step: RuleStep; cho
               <option value="warning">Warning</option>
               <option value="alarm">Alarm</option>
             </select>
-            <input className="form-control form-control-sm" aria-label="Notification text" placeholder="e.g. The front door is open" value={s.text} maxLength={200} onChange={(e) => onChange({ ...s, text: e.target.value })} style={{ minWidth: "18rem", flex: 1 }} />
+            <input className="form-control form-control-sm" aria-label="Notification text" placeholder="e.g. {device} is {state} for {duration}" value={s.text} maxLength={200} onChange={(e) => onChange({ ...s, text: e.target.value })} style={{ minWidth: "18rem", flex: 1 }} />
+            <span className="small text-body-secondary w-100">
+              Filled in when sent: {'{device}'} and {'{state}'} (the device that started the rule, and its value now), {'{duration}'} (its "stays so for"), {'{rule}'}, {'{time}'}.
+            </span>
           </>
         )}
       </div>

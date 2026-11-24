@@ -24,7 +24,7 @@ function setup() {
 describe('members', () => {
   it('allows everything by default, including later actions and rooms, and stores revocations', () => {
     const { members, actions, rooms } = setup();
-    const kasia = members.create({ name: 'Kasia' });
+    const kasia = members.create({ name: 'Anna' });
     const garage = rooms.create({ name: 'Garage' });
     const a = actions.create({ name: 'Garage light', steps: STEP });
     expect(members.actionAllowed(kasia.id, a.id)).toBe(true);
@@ -89,7 +89,7 @@ describe('app API', () => {
     const { token, member } = pair.json();
     expect(member).toBe('Jacek');
     const me = await appApi.inject({ method: 'GET', url: '/api/app/v1/me', headers: { authorization: `Bearer ${token}` } });
-    expect(me.json()).toEqual({ member: 'Jacek', phone: 'Pixel 8', hubVersion: '0.2.0', actions: 1, rooms: 0 });
+    expect(me.json()).toEqual({ member: 'Jacek', phone: 'Pixel 8', hubVersion: '0.2.0', actions: 1, rooms: 0, mayPauseAlerts: false, alertsPaused: null });
     expect(me.headers['cache-control']).toBe('no-store');
     expect(members.get(m.id)!.phones[0]!.lastUsedAt).not.toBeNull();
   });
@@ -125,7 +125,7 @@ describe('app actions', () => {
     const evening = actions.create({ name: 'Evening', icon: 'nightlight', steps: STEP });
     const draft = actions.create({ name: 'Imported', draft: true, steps: STEP });
     const garage = actions.create({ name: 'Garage', steps: STEP });
-    const m = members.create({ name: 'Kasia' });
+    const m = members.create({ name: 'Anna' });
     members.setPermissions(m.id, { revokedActions: [garage.id] });
     const { token } = members.pair(members.createPairingCode(m.id).code, 'Pixel');
     const headers = { authorization: `Bearer ${token}` };
@@ -155,7 +155,7 @@ describe('app home', () => {
     const loose = actions.create({ name: 'Loose', steps: STEP });
     const membership: Record<number, number[]> = { [night.id]: [bedroom.id], [door.id]: [garage.id], [all.id]: [bedroom.id, garage.id] };
     const appApi = buildAppServer({ members, actions, rooms, actionRooms: () => membership, version: 't' });
-    const m = members.create({ name: 'Kasia' });
+    const m = members.create({ name: 'Anna' });
     members.setPermissions(m.id, { revokedRooms: [garage.id] });
     const { token } = members.pair(members.createPairingCode(m.id).code, 'Pixel');
     const home = (await appApi.inject({ method: 'GET', url: '/api/app/v1/home', headers: { authorization: `Bearer ${token}` } })).json();
@@ -173,7 +173,7 @@ describe('app home', () => {
     const members = new Members(db);
     const actions = new Actions(db);
     const a = actions.create({ name: 'Night', steps: STEP });
-    const [jacek, kasia] = [members.create({ name: 'Jacek' }), members.create({ name: 'Kasia' })];
+    const [jacek, kasia] = [members.create({ name: 'Jacek' }), members.create({ name: 'Anna' })];
     expect(members.access('action', a.id).map((x) => x.allowed)).toEqual([true, true]);
     members.setAccess('action', a.id, [jacek.id]);
     expect(members.actionAllowed(kasia.id, a.id)).toBe(false);

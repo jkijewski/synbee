@@ -39,10 +39,13 @@ The hub is a modular monolith ([0015](decisions/0015-modular-monolith.md)): one 
 | Rules | `rules.ts`, `rule-engine.ts`, `rule-match.ts`, `rule-describe.ts`, `rule-runs.ts`, `rule-durations.ts`, `rule-later.ts` | `rules`, `rule_runs`, `duration_timers`, `later_steps` |
 | History | `history.ts` | `readings_raw`, `readings_5m`, `readings_1h`, `value_since` |
 | Energy | `energy.ts` | `energy_daily`, `energy_counter` |
-| Notifications | `notifications.ts` | `notifications` |
+| Sensor groups | `sensor-groups.ts` | `sensor_groups`, `sensor_group_members` |
+| Checks | `checks.ts` (evaluated by the rule engine; condition types in `conditions.ts`) | `checks` |
+| Status tiles | `tiles.ts`, `status-tiles.ts`, `units.ts` | `device_tiles` |
+| Notifications and alerts | `notifications.ts`, `chat-channel.ts` (Synology Chat), `alert-pause.ts` | `notifications` |
 | Settings | `settings.ts` | `settings` |
 | Admin sign-in | `auth.ts` | `users`, `sessions` |
-| App members and phones | `members.ts`, `tls.ts` | `members`, `member_revoked_actions`, `member_revoked_rooms`, `member_phones`, `member_pairing_codes` |
+| App members and phones | `members.ts`, `tls.ts` | `members`, `member_revoked_actions`, `member_revoked_rooms`, `member_hidden_tiles`, `member_phones`, `member_pairing_codes` |
 | Gateways | `networks.ts`, `gateway.ts`, `coordinator.ts`, `backup.ts`, `gateway-web.ts` | files in the private folder, per gateway |
 | Tuya import | `tuya-import.ts`, `tuya-export.ts` | (writes through the owners) |
 | Related items | `related.ts` | (read model) |
@@ -60,14 +63,14 @@ The hub is a modular monolith ([0015](decisions/0015-modular-monolith.md)): one 
 
 ## Web interface
 
-React, served by the hub from `hub/dist-web`, one page per area in `hub/web/src/`: Devices, Rooms, Actions, Automations (`rules/`), Light groups, Add devices, Import from Tuya, Gateway, App users and Status. Data comes through `api.ts` and the `useApi` hook. Device controls and editors come from `web/src/features/`, which wrap the hub's feature modules. Pages open by address (`#devices/<ieee>`, `#actions/<id>`, …). The header shows the gateway light and the notification bell.
+React, served by the hub from `hub/dist-web`, one page per area in `hub/web/src/`. The header lists Devices, Rooms, Actions, Automations (`rules/`), Groups (light groups and sensor groups), Checks and App users, and an Administration menu with Add devices, Import from Tuya, Gateway and Status. Data comes through `api.ts` and the `useApi` hook. Device controls and editors come from `web/src/features/`, which wrap the hub's feature modules. Pages open by address (`#devices/<ieee>`, `#actions/<id>`, `#sensors`, `#checks`, …). The header shows the gateway light and the notification bell.
 
 ## Data
 
 | What | Where | Why |
 | --- | --- | --- |
 | Hub database (`hub.db`) and room photos | `synbee` folder in the shared folder chosen at install | Backed up with DSM's tools; no secrets |
-| TLS key of the app listener, MQTT password, coordinator address, gateway web logins | Package's private folder (`/var/packages/synbee/var/secrets`) | Not readable through a share |
+| TLS key of the app listener, MQTT password, coordinator address, gateway web logins, the Synology Chat webhook | Package's private folder (`/var/packages/synbee/var/secrets`) | Not readable through a share |
 | Safety copies before upgrades: `hub.db.before-v…` next to the database, Zigbee2MQTT data in `…/var/snapshots` | Last 3 of each | A way back from a bad upgrade |
 | Zigbee2MQTT data: configuration with the network key, coordinator backup, device database | Package's private folder (`…/var/zigbee2mqtt`) | Every copy of the network key stays private |
 | Logs | Package's private folder (`…/var/logs`), shown in the Status page with key lines hidden | |

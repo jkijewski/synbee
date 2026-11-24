@@ -212,6 +212,49 @@ const migrations: string[] = [
   `ALTER TABLE member_phones ADD COLUMN outside INTEGER NOT NULL DEFAULT 0 CHECK (outside IN (0, 1));`,
   // Which upgrades ran, and the copy taken before each, for the Status page (written by db.ts itself).
   `CREATE TABLE migration_log (at TEXT NOT NULL, from_version INTEGER NOT NULL, to_version INTEGER NOT NULL, snapshot TEXT);`,
+  // An action's own IF (0011): conditions checked when it is tapped; unmet, it doesn't run and says why.
+  `ALTER TABLE actions ADD COLUMN if_json TEXT;`,
+  // Sensor groups, checks and the app's status tiles (plan: checks and alerts).
+  `CREATE TABLE sensor_groups (
+     id INTEGER PRIMARY KEY,
+     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     kind TEXT NOT NULL,
+     room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+     tile INTEGER NOT NULL DEFAULT 1 CHECK (tile IN (0, 1))
+   );
+   CREATE TABLE sensor_group_members (
+     group_id INTEGER NOT NULL REFERENCES sensor_groups(id) ON DELETE CASCADE,
+     ieee TEXT NOT NULL,
+     property TEXT NOT NULL,
+     PRIMARY KEY (group_id, ieee, property)
+   );
+   CREATE TABLE checks (
+     id INTEGER PRIMARY KEY,
+     name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+     if_json TEXT NOT NULL,
+     true_text TEXT NOT NULL,
+     true_level TEXT NOT NULL,
+     false_text TEXT NOT NULL,
+     false_level TEXT NOT NULL,
+     room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+     tile INTEGER NOT NULL DEFAULT 1 CHECK (tile IN (0, 1))
+   );
+   CREATE TABLE device_tiles (
+     ieee TEXT PRIMARY KEY,
+     property TEXT
+   );`,
+  // Whether a member may pause alerts from the app.
+  `ALTER TABLE members ADD COLUMN may_pause_alerts INTEGER NOT NULL DEFAULT 0 CHECK (may_pause_alerts IN (0, 1));`,
+  // The owner's words for yes/no states, and which members see which status tiles.
+  `ALTER TABLE sensor_groups ADD COLUMN active_label TEXT;
+   ALTER TABLE sensor_groups ADD COLUMN inactive_label TEXT;
+   ALTER TABLE device_tiles ADD COLUMN active_label TEXT;
+   ALTER TABLE device_tiles ADD COLUMN inactive_label TEXT;
+   CREATE TABLE member_hidden_tiles (
+     member_id INTEGER NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+     tile TEXT NOT NULL,
+     PRIMARY KEY (member_id, tile)
+   );`,
 ];
 
 /** Copies of the database taken before migrations, kept next to it: the last few only. */

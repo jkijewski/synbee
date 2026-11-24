@@ -60,7 +60,7 @@ Every other route SHALL need `Authorization: Bearer <token>` of a paired, unrevo
 - **THEN** the hub answers with the member's name, the phone's name, the hub's version and how many actions and rooms the member may use
 
 ### Requirement: Actions
-`GET /api/app/v1/actions` SHALL list the actions the phone's member may run (not drafts, not revoked), in the owner's order, with their id, name, icon and description. `POST /api/app/v1/actions/{id}/run` SHALL run one of them and answer whether it succeeded and, if not, which step failed and why. Drafts, revoked and missing actions SHALL all answer 404. Running an action from the app SHALL be an action event for automations, like a run from the web interface.
+`GET /api/app/v1/actions` SHALL list the actions the phone's member may run (not drafts, not revoked), in the owner's order, with their id, name, icon and description. `POST /api/app/v1/actions/{id}/run` SHALL run one of them and answer whether it succeeded and, if not, which step failed and why, or, when its conditions weren't met, `notRun` with what wasn't true. Drafts, revoked and missing actions SHALL all answer 404. Running an action from the app SHALL be an action event for automations, like a run from the web interface.
 
 #### Scenario: Running an action
 - **WHEN** a paired phone runs "Evening"
@@ -71,12 +71,15 @@ Every other route SHALL need `Authorization: Bearer <token>` of a paired, unrevo
 - **THEN** the answer is 404, as for a missing action
 
 ### Requirement: Home screen by room
-`GET /api/app/v1/home` SHALL return the member's allowed rooms that have actions, in the owner's order, each with its name, icon and colour (the same colour as in the web interface), and the member's actions with their icon and the allowed rooms they belong to. An action belongs to the rooms of the devices it uses; one that uses no room's devices SHALL have no rooms (the app shows it under "Other"); one whose rooms are all revoked for the member SHALL NOT be listed.
+`GET /api/app/v1/home` SHALL return the member's allowed rooms that have actions or status tiles, in the owner's order, each with its name, icon and colour (the same colour as in the web interface), and the member's actions with their icon and the allowed rooms they belong to. An action belongs to the rooms of the devices it uses; one that uses no room's devices SHALL have no rooms (the app shows it under "Other"); one whose rooms are all revoked for the member SHALL NOT be listed.
 
 #### Scenario: A revoked room
 - **GIVEN** "Wieczór" uses a light in "Salon", and "Wszystko off" uses lights in "Salon" and "Garaż"
-- **WHEN** "Garaż" is revoked for Kasia
+- **WHEN** "Garaż" is revoked for Anna
 - **THEN** her home lists only "Salon", with both actions under it
+
+### Requirement: Status tiles and pausing alerts
+`GET /api/app/v1/home` SHALL also return the status tiles the member may see (see the [status and alerts spec](../status-and-alerts/spec.md)), each with its id, kind, room, name, icon, text, level, an optional colour and its explanation. `GET /api/app/v1/me` SHALL say whether the member may pause alerts and whether alerts are paused, by whom and until when. `POST /api/app/v1/alerts/pause` with a number of minutes (0 to resume, at most a day) SHALL pause or resume alerts for members allowed to, and answer 403 to others.
 
 ### Requirement: Action state on the tile
 Each action on the home screen SHALL carry its state: `active` when every device it sets shows what the action leaves it showing (its steps merged in order) (on/off exactly, brightness within 5 % of its range, colour within 10° of hue, white temperature within 10 mired, other values exactly; "off" matches an off device whatever else the step says), `partly` when only some do, `inactive` when none does, or null when no state is known. It SHALL also carry the tile's colour state (`power`: `on`, `partly`, `off` or null), by the kind of action: a scene (setting colour, white temperature or brightness) is `on` only while every device shows what the scene leaves it showing (its steps merged in order), and `off` otherwise, so of several scenes on the same lights only the showing one is coloured; a plain "on" action is `on` while what it switches is on; an "off" action is always `off`. The app colours the tile by it and marks an active action with a check. It SHALL also carry a status line: what the owner chose for the tile, or by default the words of what it switches ("Off", "2 of 3 on", "On · red · 30 %"). The app SHALL re-read the home screen every 5 seconds while it is open and in front, and right after running an action.

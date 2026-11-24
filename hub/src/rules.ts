@@ -1,4 +1,5 @@
 import type { Db } from './db.js';
+import type { Condition, Weekday } from './conditions.js';
 import { Devices } from './devices.js';
 import { flattenExposes } from './exposes.js';
 import { checkValues } from './features/index.js';
@@ -6,13 +7,16 @@ import { checkValue } from './exposes.js';
 import { buttonEvents, type PressType } from './buttons.js';
 import { Actions, stepReadiness, type Readiness } from './actions.js';
 import { LightGroups } from './groups.js';
+import { Checks } from './checks.js';
+import { SensorGroups } from './sensor-groups.js';
 import type { DeviceControl } from './ports.js';
 import { LOCATION_KEY, Settings } from './settings.js';
 import { validLocation } from './sun.js';
 
+export type { Comparator, Condition, GroupStatus, Weekday } from './conditions.js';
+
 // WHEN / IF / THEN rules (0010): the model, validation against device capabilities, and storage.
 
-export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7; // ISO: Monday 1 … Sunday 7
 
 export type Trigger =
   /** A button press, by normalised button and press type, or by the raw value for remotes without a mapping. */
@@ -26,21 +30,12 @@ export type Trigger =
   | { type: 'sun'; event: 'sunrise' | 'sunset'; offset: number; days: Weekday[]; random?: number }
   | { type: 'every'; minutes: number }
   | { type: 'action'; action: number }
-  | { type: 'event'; name: string };
+  | { type: 'event'; name: string }
+  /** A sensor group becoming none / some / all active, optionally for N minutes. */
+  | { type: 'sensors'; group: number; becomes: 'none' | 'some' | 'all'; forMinutes?: number }
+  /** A check becoming true or false, optionally for N minutes. */
+  | { type: 'check'; check: number; becomes: boolean; forMinutes?: number };
 
-export type Comparator = 'eq' | 'ne' | 'gt' | 'lt' | 'between';
-
-export type Condition =
-  /** With `forMinutes`, the value must also have held for at least that long (0014). */
-  | { type: 'state'; device: string; property: string; op: Comparator; value: unknown; forMinutes?: number }
-  | { type: 'time'; from: string; to: string }
-  | { type: 'days'; days: Weekday[] }
-  /** Dark is from sunset to sunrise at the home's location. */
-  | { type: 'sun'; is: 'dark' | 'light' }
-  /** A light group's lights: all off, some on and some off ("partly"), or all on. */
-  | { type: 'group'; group: number; is: GroupStatus };
-
-export type GroupStatus = 'off' | 'partly' | 'on';
 
 /** What a timer does when it runs out: set a device or a light group. */
 export type TimedStep = { type: 'device'; device: string; values: Record<string, unknown> } | { type: 'group'; group: number; values: Record<string, unknown> };
@@ -187,6 +182,12 @@ function parseTrigger(raw: unknown, i: number): Trigger {
       return { type: 'action', action: intIn(t.action, 1, 1e9, `${what}: action`) };
     case 'event':
       return { type: 'event', name: eventName(t.name, what) };
+    case 'sensors':
+      if (t.becomes !== 'none' && t.becomes !== 'some' && t.becomes !== 'all') throw new RuleError(`${what}: choose none, some or all`);
+      return { type: 'sensors', group: intIn(t.group, 1, 1e9, `${what}: sensor group`), becomes: t.becomes, ...forMinutes(t, what) };
+    case 'check':
+      if (typeof t.becomes !== 'boolean') throw new RuleError(`${what}: choose true or false`);
+      return { type: 'check', check: intIn(t.check, 1, 1e9, `${what}: check`), becomes: t.becomes, ...forMinutes(t, what) };
     default:
       throw new RuleError(`${what}: unknown event type`);
   }
@@ -225,6 +226,12 @@ function parseCondition(raw: unknown, what: string): Condition {
     case 'group':
       if (c.is !== 'off' && c.is !== 'partly' && c.is !== 'on') throw new RuleError(`${what}: choose off, partly on or on`);
       return { type: 'group', group: intIn(c.group, 1, 1e9, `${what}: light group`), is: c.is };
+    case 'sensors':
+      if (c.is !== 'none' && c.is !== 'some' && c.is !== 'all') throw new RuleError(`${what}: choose none, some or all`);
+      return { type: 'sensors', group: intIn(c.group, 1, 1e9, `${what}: sensor group`), is: c.is };
+    case 'check':
+      if (typeof c.is !== 'boolean') throw new RuleError(`${what}: choose true or false`);
+      return { type: 'check', check: intIn(c.check, 1, 1e9, `${what}: check`), is: c.is };
     default:
       throw new RuleError(`${what}: unknown condition type`);
   }
@@ -268,6 +275,16 @@ function parseStep(raw: unknown, i: number): RuleStep {
     default:
       throw new RuleError(`${what}: unknown step type`);
   }
+}
+
+/** An IF part (all of / any of, up to the limit), as automations and actions use it. */
+export function parseIf(input: unknown): { mode: 'all' | 'any'; conditions: Condition[] } {
+  if (input === undefined || input === null) return { mode: 'all', conditions: [] };
+  const cond = obj(input, 'IF');
+  if (cond.mode !== 'all' && cond.mode !== 'any') throw new RuleError('IF must be "all" or "any"');
+  const conditions = cond.conditions === undefined ? [] : cond.conditions;
+  if (!Array.isArray(conditions) || conditions.length > MAX_CONDITIONS) throw new RuleError(`IF holds at most ${MAX_CONDITIONS} conditions`);
+  return { mode: cond.mode, conditions: conditions.map((c, i) => parseCondition(c, `IF ${i + 1}`)) };
 }
 
 export function parseRule(input: unknown): Omit<Rule, 'id'> {
@@ -326,10 +343,14 @@ export function checkAgainstDevices(db: Db, zigbee: Pick<DeviceControl, 'knownDe
       if (!ok) problems.push(`${where}: ${row.name} has no ${t.raw ?? `button ${t.button} ${t.press}`}`);
     } else if (t.type === 'state') checkProperty(where, t.device, t.property);
     else if (t.type === 'action' && !new Actions(db).get(t.action)) problems.push(`${where}: the action no longer exists`);
+    else if (t.type === 'sensors' && !new SensorGroups(db).get(t.group)) problems.push(`${where}: the sensor group no longer exists`);
+    else if (t.type === 'check' && !new Checks(db).get(t.check)) problems.push(`${where}: the check no longer exists`);
   });
   const checkCondition = (where: string, c: Condition) => {
     if (c.type === 'state') checkProperty(where, c.device, c.property);
     if (c.type === 'group' && !new LightGroups(db).summary(c.group)) problems.push(`${where}: the light group no longer exists`);
+    if (c.type === 'sensors' && !new SensorGroups(db).get(c.group)) problems.push(`${where}: the sensor group no longer exists`);
+    if (c.type === 'check' && !new Checks(db).get(c.check)) problems.push(`${where}: the check no longer exists`);
   };
   rule.if.conditions.forEach((c, i) => checkCondition(`IF ${i + 1}`, c));
   const usesSun = rule.when.some((w) => w.type === 'sun') || [...rule.if.conditions, ...rule.then.map((s) => s.onlyIf)].some((c) => c?.type === 'sun');

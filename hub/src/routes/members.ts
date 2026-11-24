@@ -55,6 +55,14 @@ export function registerMemberRoutes(app: FastifyInstance, ctx: RouteContext): v
     async (req, reply) => memberReply(reply, () => members.setPermissions(idParam(req.params.id), req.body ?? {})),
   );
   // The QR code the phone scans: the hub's addresses, its key fingerprint and a one-time code. Shown only here.
+  // Who sees a status tile in the app (sensor groups, checks, device tiles): everyone until the owner hides it.
+  app.get<{ Params: { tile: string } }>('/api/tile-access/:tile', async (req, reply) => memberReply(reply, () => members.tileAccess(req.params.tile)));
+  app.put<{ Params: { tile: string }; Body: { allowed?: unknown } }>('/api/tile-access/:tile', async (req, reply) =>
+    memberReply(reply, () => members.setTileAccess(req.params.tile, req.body?.allowed)),
+  );
+  app.put<{ Params: { id: string }; Body: { allowed?: unknown } }>('/api/members/:id/pause-alerts', async (req, reply) =>
+    memberReply(reply, () => members.setMayPauseAlerts(idParam(req.params.id), req.body?.allowed)),
+  );
   app.post<{ Params: { id: string } }>('/api/members/:id/pairing-code', async (req, reply) =>
     memberReply(reply, () => {
       if (!appListener) throw new MemberError('The app listener is not running on this hub', 409);

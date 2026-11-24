@@ -5,6 +5,11 @@ import type { Devices } from '../devices.js';
 import type { LightGroups } from '../groups.js';
 import type { Members } from '../members.js';
 import type { GatewayWebCheck } from '../gateway-web.js';
+import type { SynologyChat } from '../chat-channel.js';
+import type { Checks } from '../checks.js';
+import type { AlertPause } from '../alert-pause.js';
+import type { SensorGroups } from '../sensor-groups.js';
+import type { DeviceTiles } from '../tiles.js';
 import type { GatewayLogins } from '../gateway-hardening.js';
 import type { Fetch } from '../slzb.js';
 import type { DependencyIndex } from '../related.js';
@@ -81,6 +86,14 @@ export interface InternalServerDeps {
   gatewayWeb?: GatewayWebCheck;
   /** The owner's logins to the gateways' own web pages, for setting their protections (0007, option B). */
   gatewayLogins?: GatewayLogins;
+  /** Alerts out of the hub through a Synology Chat incoming webhook. */
+  chat?: SynologyChat;
+  sensorGroups?: SensorGroups;
+  /** Alerts paused by an app user, shown on the Notifications page. */
+  alertPause?: AlertPause;
+  checks?: Checks;
+  /** Which devices show as status tiles in the app. */
+  deviceTiles?: DeviceTiles;
   /** Replaces fetch towards gateways, in tests. */
   slzbFetch?: Fetch;
   appListener?: AppListener;

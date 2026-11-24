@@ -13,6 +13,8 @@ export function TriggerEditor({ trigger: t, choices, onChange }: { trigger: Trig
     ['every', 'Every few minutes'],
     ['action', 'An action runs'],
     ['event', 'A rule sends an event'],
+    ...((choices.sensorGroups?.length ?? 0) > 0 || t.type === 'sensors' ? [['sensors', 'A sensor group changes'] as [Trigger['type'], string]] : []),
+    ...((choices.checks?.length ?? 0) > 0 || t.type === 'check' ? [['check', 'A check changes'] as [Trigger['type'], string]] : []),
   ];
   const changeType = (type: Trigger['type']) => {
     if (type === 'button') onChange(defaultTrigger(choices));
@@ -23,6 +25,8 @@ export function TriggerEditor({ trigger: t, choices, onChange }: { trigger: Trig
     else if (type === 'sun') onChange({ type: 'sun', event: 'sunset', offset: 0, days: ALL_DAYS });
     else if (type === 'every') onChange({ type: 'every', minutes: 15 });
     else if (type === 'action') onChange({ type: 'action', action: choices.actions[0]?.id ?? 0 });
+    else if (type === 'sensors') onChange({ type: 'sensors', group: choices.sensorGroups?.[0]?.id ?? 0, becomes: 'some' });
+    else if (type === 'check') onChange({ type: 'check', check: choices.checks?.[0]?.id ?? 0, becomes: true });
     else onChange({ type: 'event', name: '' });
   };
   return (
@@ -109,6 +113,65 @@ export function TriggerEditor({ trigger: t, choices, onChange }: { trigger: Trig
             </option>
           ))}
         </select>
+      )}
+      {(t.type === 'sensors' || t.type === 'check') && (
+        <>
+          {t.type === 'sensors' ? (
+            <>
+              <select className="form-select form-select-sm" aria-label="Sensor group" value={t.group} onChange={(e) => onChange({ ...t, group: Number(e.target.value) })} style={{ width: 'auto' }}>
+                {(choices.sensorGroups ?? []).map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              becomes
+              {(() => {
+                const w = choices.sensorGroups?.find((g) => g.id === t.group)?.words ?? { active: 'on', inactive: 'off' };
+                return (
+                  <select className="form-select form-select-sm" aria-label="Becomes" value={t.becomes} onChange={(e) => onChange({ ...t, becomes: e.target.value as 'none' | 'some' | 'all' })} style={{ width: 'auto' }}>
+                    <option value="none">all {w.inactive}</option>
+                    <option value="some">some {w.active}</option>
+                    <option value="all">all {w.active}</option>
+                  </select>
+                );
+              })()}
+            </>
+          ) : (
+            <>
+              <select className="form-select form-select-sm" aria-label="Check" value={t.check} onChange={(e) => onChange({ ...t, check: Number(e.target.value) })} style={{ width: 'auto' }}>
+                {(choices.checks ?? []).map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name}
+                  </option>
+                ))}
+              </select>
+              becomes
+              <select className="form-select form-select-sm" aria-label="Becomes" value={String(t.becomes)} onChange={(e) => onChange({ ...t, becomes: e.target.value === 'true' })} style={{ width: 'auto' }}>
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </>
+          )}
+          <label className="d-flex align-items-center gap-1 small mb-0">
+            <input
+              className="form-check-input mt-0"
+              type="checkbox"
+              checked={t.forMinutes !== undefined}
+              onChange={(e) => {
+                const { forMinutes: _drop, ...rest } = t;
+                onChange(e.target.checked ? { ...t, forMinutes: 5 } : rest);
+              }}
+            />
+            and stays so for
+          </label>
+          {t.forMinutes !== undefined && (
+            <span className="d-flex align-items-center gap-1">
+              <input className="form-control form-control-sm" type="number" min={1} max={1440} aria-label="Minutes" value={t.forMinutes} onChange={(e) => onChange({ ...t, forMinutes: Math.min(1440, Math.max(1, Math.round(Number(e.target.value) || 1))) })} style={{ width: '5rem' }} />
+              min
+            </span>
+          )}
+        </>
       )}
       {t.type === 'event' && <input className="form-control form-control-sm" aria-label="Event name" placeholder="event name" value={t.name} maxLength={60} onChange={(e) => onChange({ ...t, name: e.target.value })} />}
     </div>

@@ -2,6 +2,7 @@ import { HistorySettings } from './history/HistorySettings';
 import { LocationSettings } from './LocationSettings';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError, onGateway } from './api';
+import { useApi } from './useApi';
 
 // Hub status, the coordinator backup (0007) and the guided coordinator replacement.
 
@@ -95,6 +96,7 @@ export function StatusPage() {
         The coordinator, its backup, the network map and replacing it are on the <a href="#gateway">Gateway</a> page.
       </p>
       {status?.database && <UpgradesPanel db={status.database} />}
+      <UnitsSettings />
       <LocationSettings />
       <HistorySettings />
       <LogsPanel />
@@ -483,6 +485,35 @@ export function ReplacePanel({ state, onChange, network = 1 }: { state: Coordina
         </button>
       </div>
       {message && <p className={message.error ? 'text-danger' : 'text-success'}>{message.text}</p>}
+    </div>
+  );
+}
+
+/** Celsius or Fahrenheit, for the app, its tiles and notification texts. */
+function UnitsSettings() {
+  const units = useApi<{ temperature: 'C' | 'F' }>('/api/units');
+  const [error, setError] = useState('');
+  if (!units.data) return null;
+  return (
+    <div className="card card-body mb-3">
+      <h3>Units</h3>
+      <div className="line">
+        <label className="line mb-0" htmlFor="unit-temp">
+          Temperatures in
+        </label>
+        <select
+          id="unit-temp"
+          className="form-select form-select-sm"
+          style={{ width: 'auto' }}
+          value={units.data.temperature}
+          onChange={(e) => void api('PUT', '/api/units', { temperature: e.target.value }).then(units.reload, (er: ApiError) => setError(er.message))}
+        >
+          <option value="C">Celsius (°C)</option>
+          <option value="F">Fahrenheit (°F)</option>
+        </select>
+      </div>
+      <p className="small text-body-secondary mb-0 mt-1">Used in the app, its tiles and notification texts. Devices report Celsius; SynBee converts.</p>
+      {error && <p className="text-danger small mb-0">{error}</p>}
     </div>
   );
 }

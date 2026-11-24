@@ -20,6 +20,13 @@ import { Devices } from './devices.js';
 import { Energy } from './energy.js';
 import { History } from './history.js';
 import { Notifications } from './notifications.js';
+import { SynologyChat } from './chat-channel.js';
+import { AlertPause } from './alert-pause.js';
+import { Checks } from './checks.js';
+import { SensorGroups } from './sensor-groups.js';
+import { DeviceTiles } from './tiles.js';
+import { statusTiles } from './status-tiles.js';
+import { autoIcon } from './device-icons.js';
 import { watchDevices } from './device-watchers.js';
 import { GatewayWebCheck } from './gateway-web.js';
 import { GatewayLogins } from './gateway-hardening.js';
@@ -103,9 +110,17 @@ async function main(): Promise<void> {
   const history = new History(db);
   const energy = new Energy(db);
   const notifications = new Notifications(db);
+  const alertPause = new AlertPause(db);
+  const chat = new SynologyChat(config.secretsDir, undefined, () => alertPause.current());
+  notifications.addChannel(chat);
   const gatewayWeb = new GatewayWebCheck(() => coordinator.address());
   const stopWatching = watchDevices(sources, { devices: new Devices(db), history, energy, notifications, gatewayWeb, gatewayName: (id) => networks.get(id)?.name ?? null });
-  const engine = new RuleEngine(db, rules, { zigbee: sources, actions, groups, history, notifications });
+  const sensorGroups = new SensorGroups(db, sources);
+  const checks = new Checks(db);
+  const deviceTiles = new DeviceTiles(db);
+  const engine = new RuleEngine(db, rules, { zigbee: sources, actions, groups, history, notifications, sensorGroups, checks });
+  // An action's own IF is checked by the rule engine, with the same conditions as automations (0011).
+  actions.setConditionCheck((cond) => engine.checkConditions(cond));
   engine.start();
   const members = new Members(db);
   const tls = await ensureTlsIdentity(config.secretsDir);
@@ -134,6 +149,11 @@ async function main(): Promise<void> {
     members,
     gatewayWeb,
     gatewayLogins: new GatewayLogins(config.secretsDir),
+    chat,
+    alertPause,
+    sensorGroups,
+    checks,
+    deviceTiles,
     dbFile: path.join(config.dataDir, 'hub.db'),
     snapshotDir: z2mData ? path.join(path.dirname(z2mData), 'snapshots') : undefined,
     appListener: { port: appPort, addresses: () => homeAddresses(), fingerprint: () => tls.fingerprint },
@@ -156,6 +176,17 @@ async function main(): Promise<void> {
     port: appPort,
     version: VERSION,
     https: { key: tls.key, cert: tls.cert },
+    alertPause,
+    tiles: () =>
+      statusTiles({
+        db,
+        views,
+        deviceTiles,
+        sensorGroups,
+        checks,
+        engine,
+        iconOf: (ieee) => new Devices(db).icons(ieee).icon ?? autoIcon(sources.knownDevices().find((d) => d.ieee_address.toLowerCase() === ieee)?.definition) ?? 'sensors',
+      }),
   });
 
   const shutdown = async (signal: string) => {

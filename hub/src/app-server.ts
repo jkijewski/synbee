@@ -8,6 +8,8 @@ import { RateLimiter } from './rate-limit.js';
 import { roomColors } from './room-colors.js';
 import type { Rooms } from './rooms.js';
 import { defaultAppAccess, type AppAccess } from './settings.js';
+import type { StatusTile } from './status-tiles.js';
+import type { AlertPause } from './alert-pause.js';
 
 // The app listener (0021): its own port, TLS with the hub's key, away from home only when allowed, and nothing but the app API.
 // Members and phones come from members.ts; nothing here changes configuration.
@@ -31,9 +33,13 @@ export interface AppServerDeps {
   homeAddresses?: () => string[];
   /** The app port, for an outside address without a port of its own. */
   port?: number;
+  /** Status tiles of every room (devices, sensor groups, checks); filtered here by what the member may see. */
+  tiles?: () => StatusTile[];
+  /** Pausing alerts, for members the owner allows. */
+  alertPause?: AlertPause;
 }
 
-export function buildAppServer({ members, actions, rooms, actionRooms, views, version, https, access = () => defaultAppAccess, homeAddresses = () => [], port = 8443 }: AppServerDeps): FastifyInstance {
+export function buildAppServer({ members, actions, rooms, actionRooms, views, version, https, access = () => defaultAppAccess, homeAddresses = () => [], port = 8443, tiles = () => [], alertPause }: AppServerDeps): FastifyInstance {
   const options: FastifyServerOptions = {
     logger: false,
     bodyLimit: 16 * 1024,
@@ -154,6 +160,8 @@ export function buildAppServer({ members, actions, rooms, actionRooms, views, ve
       hubVersion: version,
       actions: allowedActions(phone.memberId).length,
       rooms: rooms.list().filter((r) => members.roomAllowed(phone.memberId, r.id)).length,
+      mayPauseAlerts: members.get(phone.memberId)?.mayPauseAlerts ?? false,
+      alertsPaused: alertPause?.current() ?? null,
     };
   });
 
@@ -179,10 +187,15 @@ export function buildAppServer({ members, actions, rooms, actionRooms, views, ve
       // state: whether its devices show what it sets (active, partly, inactive, or null when unknown); status: the tile's line.
       return [{ id: a.id, name: a.name, icon: a.icon, description: a.description, rooms: shown, state: views?.actionState(a) ?? null, power: views?.tileLook(a) ?? null, status: views?.actionStatus(a) ?? '' }];
     });
-    const used = new Set(list.flatMap((a) => a.rooms));
+    // Status tiles in the rooms the member may see; a tile's explanation leaves out devices in rooms they can't see.
+    const status = tiles()
+      .filter((t) => (t.room === null ? true : allowedIds.has(t.room)) && members.tileAllowed(phone.memberId, t.id))
+      .map((t) => ({ ...t, why: t.why.filter((w) => w.room === undefined || members.roomAllowed(phone.memberId, w.room)).map((w) => w.text) }));
+    const used = new Set([...list.flatMap((a) => a.rooms), ...status.flatMap((t) => (t.room === null ? [] : [t.room]))]);
     return {
       rooms: allowedRooms.filter((r) => used.has(r.id)).map((r) => ({ id: r.id, name: r.name, icon: r.icon, color: colors.get(r.id)! })),
       actions: list,
+      tiles: status,
     };
   });
 
@@ -204,13 +217,26 @@ export function buildAppServer({ members, actions, rooms, actionRooms, views, ve
     return { id: room.id, name: room.name, icon: room.icon, color: roomColors(all).get(room.id)!, devices: views?.room(room.id) ?? [] };
   });
 
+  // Pause alerts (Synology Chat) for a while, or resume with 0 minutes: only for members the owner allows.
+  app.post<{ Body: { minutes: number } }>(`${PREFIX}/alerts/pause`, schemaOf('POST', `${PREFIX}/alerts/pause`), async (req, reply) => {
+    const phone = phoneOf(req);
+    if (!alertPause || !members.get(phone.memberId)?.mayPauseAlerts) return reply.code(403).send({ error: "You may not pause alerts; the owner can allow it on the App users page" });
+    try {
+      const paused = alertPause.set(req.body.minutes, `${phone.memberName} (${phone.phoneName})`);
+      console.log(`hub: alerts ${paused ? `paused until ${new Date(paused.until).toISOString()} by ${paused.by}` : `resumed by ${phone.memberName}`}`);
+      return { paused };
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  });
+
   app.post<{ Params: { id: string } }>(`${PREFIX}/actions/:id/run`, schemaOf('POST', `${PREFIX}/actions/:id/run`), async (req, reply) => {
     const phone = phoneOf(req);
     const id = /^\d{1,9}$/.test(req.params.id) ? Number(req.params.id) : -1;
     // Drafts and revoked actions look exactly like missing ones.
     if (!allowedActions(phone.memberId).some((a) => a.id === id)) return reply.code(404).send({ error: 'Not found' });
     const result = await actions.run(id, { source: `app: ${phone.memberName} (${phone.phoneName})` });
-    return { ok: result.ok, ...(result.ok ? {} : { failedStep: result.failedStep, error: result.error }) };
+    return { ok: result.ok, ...(result.ok ? {} : { failedStep: result.failedStep, error: result.error, notRun: result.notRun }) };
   });
 
   return app;

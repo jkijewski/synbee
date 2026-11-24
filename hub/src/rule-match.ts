@@ -98,6 +98,10 @@ export function evaluateCondition(
   location: Location | null = null,
   /** Whether each light of a group is on (true), off (false) or unknown (undefined). */
   groupLights?: (group: number) => Array<boolean | undefined>,
+  /** A sensor group's value and its words, null when unknown. */
+  sensorGroup?: (group: number) => { value: 'none' | 'some' | 'all' | null; text: string },
+  /** A check's value and its words, null when it can't be decided. */
+  check?: (check: number) => { value: boolean | null; text: string },
 ): { met: boolean; actual?: unknown } {
   if (c.type === 'state') {
     const actual = deviceValue(c.device, c.property);
@@ -112,6 +116,14 @@ export function evaluateCondition(
   if (c.type === 'group') {
     const status = groupStatus(groupLights?.(c.group) ?? []);
     return { met: status === c.is, actual: status ?? 'unknown' };
+  }
+  if (c.type === 'sensors') {
+    const s = sensorGroup?.(c.group);
+    return { met: s?.value === c.is, actual: s?.text ?? 'unknown' };
+  }
+  if (c.type === 'check') {
+    const k = check?.(c.check);
+    return { met: k?.value === c.is, actual: k?.text ?? 'unknown' };
   }
   if (c.type === 'sun') {
     if (!location) return { met: false, actual: 'no home location set' };

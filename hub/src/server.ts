@@ -23,6 +23,9 @@ import { registerRuleRoutes } from './routes/rules.js';
 import { serveWeb } from './routes/web.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerNotificationRoutes } from './routes/notifications.js';
+import { registerConditionRoutes } from './routes/conditions.js';
+import { Checks } from './checks.js';
+import { SensorGroups } from './sensor-groups.js';
 import { Energy } from './energy.js';
 import { History } from './history.js';
 import { Notifications } from './notifications.js';
@@ -45,7 +48,9 @@ export function buildInternalServer(deps: InternalServerDeps): FastifyInstance {
   const history = deps.history ?? new History(db);
   const energy = deps.energy ?? new Energy(db);
   const notifications = deps.notifications ?? new Notifications(db);
-  const engine = deps.engine ?? new RuleEngine(db, rules, { zigbee: control, actions, groups, history, notifications, minuteTimer: false });
+  const sensorGroups = deps.sensorGroups ?? new SensorGroups(db, control);
+  const checks = deps.checks ?? new Checks(db);
+  const engine = deps.engine ?? new RuleEngine(db, rules, { zigbee: control, actions, groups, history, notifications, sensorGroups, checks, minuteTimer: false });
   const devices = new Devices(db);
   const auth = new Auth(db);
   const app = Fastify({ logger: false, bodyLimit: 1024 * 1024 });
@@ -133,6 +138,7 @@ export function buildInternalServer(deps: InternalServerDeps): FastifyInstance {
   registerHistoryRoutes(app, ctx);
   registerNotificationRoutes(app, ctx);
   registerMemberRoutes(app, ctx);
+  registerConditionRoutes(app, ctx);
   if (webRoot) serveWeb(app, webRoot);
   return app;
 }

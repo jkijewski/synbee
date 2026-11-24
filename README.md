@@ -12,10 +12,11 @@ SynBee turns a Synology NAS into a private Zigbee hub. It controls Zigbee switch
 - **Rooms:** one main room per device, more as an option, with colours and photos.
 - **Light groups:** switch several lights with one command.
 - **Automations:** WHEN / IF / THEN rules built from lists, with "for N minutes", run history, a Test button and notifications.
-- **Actions:** named one-tap commands that switch devices and light groups, also usable as automation triggers.
-- **App users:** members paired by QR code, each allowed every action and room until the owner takes something away.
+- **Actions:** named one-tap commands that switch devices and light groups, optionally only when conditions hold ("Not run: Roof window is Open"), also usable as automation triggers.
+- **Sensor groups and checks:** several sensors read as one state ("Windows: all closed"), and your own named statements ("Ready to leave") in your words, for tiles, automations and actions.
+- **App users:** members paired by QR code, each allowed every action, room and status tile until the owner takes something away; status tiles show devices, sensor groups and checks in each room.
 - **History and energy:** graphs per reading, and kWh per day for metered devices.
-- **Attention and notifications:** leaks, smoke, low batteries, offline devices and a lost gateway, in one list and an inbox.
+- **Attention, notifications and alerts:** leaks, smoke, low batteries, offline devices and a lost gateway, in one list and an inbox, and alerts to your phone through Synology Chat, which app users you allow can pause.
 - **Gateway:** status, network map, encrypted backup download and restore, and a guided coordinator replacement without pairing devices again.
 - **Import from Tuya (optional):** bring over names, rooms, groups, scenes and automations from a Tuya gateway.
 - **Private by design:** nothing leaves your network. SynBee makes no outside connections of its own, the web interface answers only on the home network, and secrets stay out of shared folders. (If you use the Android app away from home, you forward one port and allow each phone; the app's requests then travel over the internet to your NAS, encrypted with TLS to SynBee's own key.)
@@ -58,6 +59,10 @@ Then open http://127.0.0.1:8090. To build the DSM package, run `package/synbee-s
 ## Support
 
 Questions and problems: [GitHub issues](https://github.com/jkijewski/synbee/issues) or jacek.kijewski.gdynia@gmail.com. If SynBee is useful to you, you can [buy me a coffee](https://buycoffee.to/jacek-kijewski).
+
+## Trademarks
+
+SynBee is an independent project, not affiliated with or endorsed by Synology Inc. Synology, DSM and Synology Chat are trademarks of Synology Inc.; Zigbee is a trademark of the Connectivity Standards Alliance.
 
 ## Disclaimer
 

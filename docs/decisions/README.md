@@ -27,3 +27,5 @@ Each record states one decision about how SynBee is built, as it is now: the con
 | 0021 | [The app API: its own TLS listener, at home and away](0021-app-api.md) |
 | 0022 | [The Android app is a separate project](0022-android-app.md) |
 | 0023 | [Device sources behind ports: several gateways now, Matter later](0023-device-sources.md) |
+| 0024 | [Sensor groups, checks and status tiles](0024-sensor-groups-and-checks.md) |
+| 0025 | [Alerts leave the hub through Synology Chat](0025-alerts-through-synology-chat.md) |

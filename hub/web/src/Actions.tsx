@@ -7,8 +7,10 @@ import { ItemRooms, RoomSections, useRooms } from './RoomSections';
 import type { LightGroup } from './api';
 import { ValuesEditor } from './Values';
 import { MemberAccess } from './MemberAccess';
+import { ConditionEditor } from './rules/ConditionEditor';
+import { defaultCondition, Item } from './rules/RuleParts';
 
-const blank = (): Omit<Action, 'id'> => ({ name: '', icon: 'bolt', description: '', order: 0, draft: false, notes: '', steps: [] });
+const blank = (): Omit<Action, 'id'> => ({ name: '', icon: 'bolt', description: '', order: 0, draft: false, notes: '', if: { mode: 'all', conditions: [] }, steps: [] });
 
 /** What the action's tile shows in the app: worked out from its steps, nothing, a light group's look or one device value. */
 function TileEditor({ tile, choices, onChange }: { tile: TileShow; choices: Choices | null; onChange: (t: TileShow) => void }) {
@@ -95,7 +97,7 @@ export function Actions() {
     setMessage(null);
     try {
       const r = await api<RunResult>('POST', `/api/actions/${a.id}/run`);
-      setMessage(r.ok ? { text: `"${a.name}" ran.`, error: false } : { text: `"${a.name}": ${r.error}`, error: true });
+      setMessage(r.ok ? { text: `"${a.name}" ran.`, error: false } : r.notRun ? { text: `"${a.name}" not run: ${r.notRun}`, error: true } : { text: `"${a.name}": ${r.error}`, error: true });
     } catch (err) {
       setMessage({ text: (err as ApiError).message, error: true });
     }
@@ -252,6 +254,7 @@ function ActionEditor({ initial, onDone }: { initial: Omit<Action, 'id'> & { id?
       </div>
       {a.id && !a.draft ? <MemberAccess kind="action" id={a.id} /> : null}
       <TileEditor tile={a.tile ?? { show: 'auto' }} choices={choices} onChange={(tile) => setA({ ...a, tile })} />
+      <OnlyWhen value={a.if ?? { mode: 'all', conditions: [] }} choices={choices} onChange={(cond) => setA({ ...a, if: cond })} />
       <h3>Steps</h3>
       {a.steps.map((step, i) => {
         const device = step.kind === 'device' ? devices.find((d) => d.ieee === step.device) : undefined;
@@ -335,6 +338,36 @@ function ActionEditor({ initial, onDone }: { initial: Omit<Action, 'id'> & { id?
         <button className="btn btn-outline-secondary btn-sm" onClick={onDone}>Cancel</button>
       </div>
       {a.id !== undefined && <Related kind="action" id={a.id} />}
+    </div>
+  );
+}
+
+/** The action's IF (0011): checked when it is tapped; unmet, it doesn't run, and the person who tapped is told what wasn't true. */
+function OnlyWhen({ value, choices, onChange }: { value: NonNullable<Action['if']>; choices: Choices | null; onChange: (v: NonNullable<Action['if']>) => void }) {
+  return (
+    <div className="card card-body mb-3 card-if">
+      <h3 className="mb-1">Only when (IF)</h3>
+      <p className="small text-body-secondary">
+        Optional. When the action is tapped, these are checked first. If they don't hold, nothing runs and the app (or this page) says what wasn't true, e.g.
+        "Not run: Roof window is Open".
+      </p>
+      {value.conditions.length > 1 && (
+        <select className="form-select form-select-sm mb-2" style={{ width: 'auto' }} aria-label="Combine conditions" value={value.mode} onChange={(e) => onChange({ ...value, mode: e.target.value as 'all' | 'any' })}>
+          <option value="all">All of these are true</option>
+          <option value="any">Any of these is true</option>
+        </select>
+      )}
+      {choices &&
+        value.conditions.map((c, i) => (
+          <Item key={i} onRemove={() => onChange({ ...value, conditions: value.conditions.filter((_, j) => j !== i) })}>
+            <ConditionEditor condition={c} choices={choices} onChange={(n) => onChange({ ...value, conditions: value.conditions.map((x, j) => (j === i ? n : x)) })} />
+          </Item>
+        ))}
+      {choices && (
+        <button className="btn btn-outline-secondary btn-sm align-self-start" onClick={() => onChange({ ...value, conditions: [...value.conditions, defaultCondition(choices)] })}>
+          Add condition
+        </button>
+      )}
     </div>
   );
 }

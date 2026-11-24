@@ -1,4 +1,6 @@
 import type { Db } from './db.js';
+import { Checks } from './checks.js';
+import { KIND_WORDS, SensorGroups } from './sensor-groups.js';
 import { Actions } from './actions.js';
 import { Devices } from './devices.js';
 import { LightGroups } from './groups.js';
@@ -16,7 +18,8 @@ export class RuleDescriber {
     return new Actions(this.db).get(id)?.name ?? id;
   }
 
-  private deviceName(ieee: string): string {
+  /** A device's name, or its address when it has none. */
+  deviceName(ieee: string): string {
     return new Devices(this.db).get(ieee)?.name ?? ieee;
   }
 
@@ -55,7 +58,27 @@ export class RuleDescriber {
       }
       case 'event':
         return `Event "${t.name}"`;
+      case 'sensors':
+        return `${this.sensorsWords(t.group, t.becomes)}${forText(t.forMinutes)}`;
+      case 'check':
+        return `Check "${this.checkName(t.check)}" became ${t.becomes ? 'true' : 'false'}${forText(t.forMinutes)}`;
     }
+  }
+
+  sensorGroupName(id: number): string {
+    return new SensorGroups(this.db).get(id)?.name ?? `sensor group ${id}`;
+  }
+
+  checkName(id: number): string {
+    return new Checks(this.db).get(id)?.name ?? `check ${id}`;
+  }
+
+  /** "Windows: all closed", "Windows: some open". */
+  private sensorsWords(id: number, value: 'none' | 'some' | 'all'): string {
+    const groups = new SensorGroups(this.db);
+    const g = groups.get(id);
+    const w = g ? groups.words(g) : KIND_WORDS.binary;
+    return `${this.sensorGroupName(id)}: ${value === 'none' ? `all ${w.inactive}` : `${value} ${w.active}`}`;
   }
 
   describeCondition(c: Condition): string {
@@ -73,6 +96,8 @@ export class RuleDescriber {
       const name = new LightGroups(this.db).summary(c.group)?.name ?? `group ${c.group}`;
       return `light group ${name} is ${{ off: 'off (all lights)', partly: 'partly on (some lights)', on: 'on (all lights)' }[c.is]}`;
     }
+    if (c.type === 'sensors') return this.sensorsWords(c.group, c.is);
+    if (c.type === 'check') return `"${this.checkName(c.check)}" is ${c.is ? 'true' : 'false'}`;
     return `day is ${c.days.map((d) => DAY_NAMES[d]).join(', ')}`;
   }
 

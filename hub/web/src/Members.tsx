@@ -48,7 +48,7 @@ export function Members() {
             });
           }}
         >
-          <input className="form-control form-control-sm" style={{ maxWidth: '16rem' }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Kasia" maxLength={40} />
+          <input className="form-control form-control-sm" style={{ maxWidth: '16rem' }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Anna" maxLength={40} />
           <button className="btn btn-primary btn-sm" disabled={!name.trim()}>
             Add user
           </button>
@@ -359,6 +359,10 @@ function MemberCard({ member, actions, rooms, membership, canPair, onChange }: {
             ))}
         </section>
       </details>
+      <label className="line small mt-2 mb-0">
+        <input className="form-check-input" type="checkbox" checked={member.mayPauseAlerts ?? false} onChange={(e) => void run(() => api('PUT', `/api/members/${member.id}/pause-alerts`, { allowed: e.target.checked }))} />
+        May pause alerts from the app (nothing goes to Synology Chat while paused)
+      </label>
     </div>
   );
 }

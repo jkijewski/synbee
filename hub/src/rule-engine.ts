@@ -10,6 +10,11 @@ import { RuleDescriber } from './rule-describe.js';
 import { buttonTrigger, conditionHoldsFor, evaluateCondition, stateTrigger, timeTrigger } from './rule-match.js';
 import { DurationTimers } from './rule-durations.js';
 import { flattenExposes } from './exposes.js';
+import { describeValue } from './features/describe.js';
+import { inUnit, temperatureUnit } from './units.js';
+import type { ActionIf } from './actions.js';
+import type { Check, Checks } from './checks.js';
+import type { SensorGroups, TileLevel } from './sensor-groups.js';
 import type { History } from './history.js';
 import type { Notifications } from './notifications.js';
 import { RuleRuns, type ConditionResult, type Outcome, type RuleRun, type StepResult } from './rule-runs.js';
@@ -25,6 +30,8 @@ export const HOP_LIMIT = 5;
 
 interface Running {
   runId: number;
+  /** What started the run, for the placeholders of notification texts. */
+  cause?: Trigger;
   abort: () => void;
   aborted: boolean;
 }
@@ -39,6 +46,11 @@ export class RuleEngine {
   private readonly durations: DurationTimers;
   private readonly later: LaterSteps;
   private readonly settings: Settings;
+  private readonly db: Db;
+  /** The last value of each sensor group ("s<id>") and check ("c<id>") an automation starts on, to see it change. */
+  private readonly watched = new Map<string, unknown>();
+  /** "For N minutes" waits of sensor group and check events, by rule and event. */
+  private readonly holdTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     db: Db,
@@ -51,6 +63,9 @@ export class RuleEngine {
       history?: History;
       /** For Notify steps (0014). */
       notifications?: Notifications;
+      /** Sensor groups and checks, for conditions and events. */
+      sensorGroups?: SensorGroups;
+      checks?: Checks;
       now?: () => Date;
       minuteTimer?: boolean;
     } = {},
@@ -61,10 +76,11 @@ export class RuleEngine {
       rules,
       now: () => this.now().getTime(),
       since: (ieee, property) => deps.history?.since(ieee, property) ?? null,
-      fire: (rule, trigger) => void this.fire(rule, this.describeTrigger(trigger), 0),
+      fire: (rule, trigger) => void this.fire(rule, this.describeTrigger(trigger), 0, { cause: trigger }),
     });
     this.later = new LaterSteps(db, { rules, now: () => this.now().getTime(), run: (rule, step, action) => void this.runTimer(rule, step, action) });
     this.settings = new Settings(db);
+    this.db = db;
   }
 
   /** The home's location for sun events and "it is dark", if set (0010). */
@@ -92,6 +108,12 @@ export class RuleEngine {
       this.unsubscribe.push(() => zigbee.off('state', onDuration));
       this.unsubscribe.push(() => zigbee.off('button', onButton), () => zigbee.off('state', onState));
     }
+    if (zigbee) {
+      const onWatched = () => this.checkWatched();
+      zigbee.on('state', onWatched);
+      this.unsubscribe.push(() => zigbee.off('state', onWatched));
+    }
+    this.checkWatched(true);
     if (actions) {
       const onRan = (e: { action: Action; result: RunResult; hops?: number }) => this.onActionRan(e);
       actions.on('ran', onRan);
@@ -109,6 +131,8 @@ export class RuleEngine {
     this.timer = null;
     for (const off of this.unsubscribe.splice(0)) off();
     for (const r of this.running.values()) r.abort();
+    for (const t of this.holdTimers.values()) clearTimeout(t);
+    this.holdTimers.clear();
   }
 
   private scheduleMinute(): void {
@@ -123,9 +147,11 @@ export class RuleEngine {
 
   /** Checks time events for the given minute, in the NAS's time zone. */
   tick(at: Date): void {
+    // Checks with a time window or "it is dark" change without a device event.
+    this.checkWatched();
     for (const rule of this.rules.enabled()) {
       const t = timeTrigger(rule, at, this.location());
-      if (t) void this.fire(rule, this.describeTrigger(t), 0);
+      if (t) void this.fire(rule, this.describeTrigger(t), 0, { cause: t });
     }
   }
 
@@ -139,14 +165,14 @@ export class RuleEngine {
   private onButton(e: DeviceEvents['button']): void {
     for (const rule of this.rules.enabled()) {
       const t = buttonTrigger(rule, e);
-      if (t) void this.fire(rule, this.describeTrigger(t), 0);
+      if (t) void this.fire(rule, this.describeTrigger(t), 0, { cause: t });
     }
   }
 
   private onState(e: DeviceEvents['state']): void {
     for (const rule of this.rules.enabled()) {
       const t = stateTrigger(rule, e);
-      if (t) void this.fire(rule, this.describeTrigger(t), 0);
+      if (t) void this.fire(rule, this.describeTrigger(t), 0, { cause: t });
     }
   }
 
@@ -174,7 +200,7 @@ export class RuleEngine {
   }
 
   /** Runs a rule for one event and records the run. Returns the run's id. */
-  private async fire(rule: Rule, trigger: string, hops: number, opts: { test?: boolean; force?: boolean } = {}): Promise<number | undefined> {
+  private async fire(rule: Rule, trigger: string, hops: number, opts: { test?: boolean; force?: boolean; cause?: Trigger } = {}): Promise<number | undefined> {
     const test = opts.test === true;
     if (this.stopped && !test) return undefined;
     if (this.running.has(rule.id)) return this.insertRun(rule.id, trigger, test, 'ignored', 'The rule was still running from an earlier event');
@@ -185,6 +211,7 @@ export class RuleEngine {
     let wake: (() => void) | null = null;
     const running: Running = {
       runId,
+      cause: opts.cause,
       aborted: false,
       abort: () => {
         running.aborted = true;
@@ -238,7 +265,7 @@ export class RuleEngine {
             }
           } else if (step.type === 'later') {
             this.later.arm(rule.id, i, step.minutes, step.step);
-          } else await this.runStep(step, hops, rule.id);
+          } else await this.runStep(step, hops, rule.id, running.cause);
           steps.push({ step: i + 1, what, status: 'done' });
           if (step.stop) {
             for (const [j, rest] of rule.then.entries()) if (j > i) steps.push({ step: j + 1, what: this.describeStep(rest), status: 'not run', reason: 'Stopped after the previous step' });
@@ -262,7 +289,7 @@ export class RuleEngine {
     }
   }
 
-  private async runStep(step: RuleStep, hops: number, ruleId: number): Promise<void> {
+  private async runStep(step: RuleStep, hops: number, ruleId: number, cause?: Trigger): Promise<void> {
     const { zigbee, actions, groups } = this.deps;
     switch (step.type) {
       case 'device':
@@ -281,7 +308,10 @@ export class RuleEngine {
       }
       case 'notify':
         if (!this.deps.notifications) throw new Error('Notifications are not available');
-        this.deps.notifications.notify({ level: step.level, title: step.text, ruleId, dedupeKey: `rule:${ruleId}:${step.text}` });
+        {
+          const text = this.fillText(step.text, ruleId, cause);
+          this.deps.notifications.notify({ level: step.level, title: text, ruleId, dedupeKey: `rule:${ruleId}:${text}` });
+        }
         return;
       case 'event':
         // Delivered after this step, so the sending rule is never "still running" for its own chain.
@@ -292,7 +322,7 @@ export class RuleEngine {
     }
   }
 
-  private evaluate(c: Condition): ConditionResult {
+  private evaluate(c: Condition, inCheck = false): ConditionResult {
     const result = evaluateCondition(
       c,
       (ieee, property) => this.deps.zigbee?.deviceState(ieee)?.[property],
@@ -304,12 +334,132 @@ export class RuleEngine {
       },
       this.location(),
       (group) => this.groupLights(group),
+      (group) => {
+        const s = this.deps.sensorGroups?.status(group);
+        return { value: s?.value ?? null, text: s?.text ?? 'unknown' };
+      },
+      // A check can't contain another check, so inside one this is never reached.
+      (check) => {
+        const k = inCheck ? null : this.evaluateCheck(check);
+        return { value: k?.value ?? null, text: k?.text ?? 'unknown' };
+      },
     );
     return { condition: this.describeCondition(c), ...result };
   }
 
   describeTrigger(t: Trigger): string {
     return this.describer.describeTrigger(t);
+  }
+
+  /** A device value in words ("Open", "21.4 °C"), or as it is. */
+  private valueWords(ieee: string, property: string, value: unknown): string {
+    const prop = flattenExposes(this.deps.zigbee?.knownDevices().find((d) => d.ieee_address.toLowerCase() === ieee)?.definition?.exposes).find((p) => p.property === property);
+    return inUnit((prop ? describeValue(prop, value) : null) ?? String(value), temperatureUnit(this.db));
+  }
+
+  /**
+   * Fills a notification text's placeholders from what started the run: {device}, {state} (its value now, in words),
+   * {duration} ("5 min" for "and stays so for"), {rule} and {time}. Unknown placeholders stay as they are.
+   */
+  fillText(text: string, ruleId: number, cause?: Trigger): string {
+    const device = cause && 'device' in cause ? cause.device : undefined;
+    const property = cause?.type === 'state' ? cause.property : undefined;
+    const now = this.now();
+    const group = cause?.type === 'sensors' ? cause.group : undefined;
+    const checkId = cause?.type === 'check' ? cause.check : undefined;
+    const values: Record<string, () => string> = {
+      device: () => (device ? this.describer.deviceName(device) : group ? this.describer.sensorGroupName(group) : ''),
+      state: () =>
+        device && property
+          ? this.valueWords(device, property, this.deps.zigbee?.deviceState(device)?.[property])
+          : group
+            ? (this.deps.sensorGroups?.status(group)?.text ?? '')
+            : checkId
+              ? (this.evaluateCheck(checkId)?.text ?? '')
+              : '',
+      check: () => (checkId ? this.describer.checkName(checkId) : ''),
+      why: () =>
+        checkId
+          ? (this.evaluateCheck(checkId)?.why.map((w) => w.text).join(', ') ?? '')
+          : group
+            ? (this.deps.sensorGroups?.status(group)?.text ?? '')
+            : '',
+      duration: () => (cause && 'forMinutes' in cause && cause.forMinutes ? `${cause.forMinutes} min` : ''),
+      rule: () => this.rules.get(ruleId)?.name ?? '',
+      time: () => `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    };
+    return text.replace(/\{(device|state|duration|rule|time|check|why)\}/g, (_m, k: string) => values[k]!()).replace(/\s{2,}/g, ' ').trim();
+  }
+
+  /** A condition's state in words for explanations: "Kitchen window is Open", "Windows: 2 of 5 open: Kitchen, Hall". */
+  private conditionWords(c: Condition, r: ConditionResult): { text: string; ieee?: string } {
+    if (c.type === 'state' && r.actual !== undefined && r.actual !== 'unknown') return { text: `${this.describer.deviceName(c.device)} is ${this.valueWords(c.device, c.property, r.actual)}`, ieee: c.device };
+    if (c.type === 'sensors') return { text: `${this.describer.sensorGroupName(c.group)}: ${String(r.actual)}` };
+    if (c.type === 'check') return { text: `"${this.describer.checkName(c.check)}": ${String(r.actual)}` };
+    return { text: r.met ? r.condition : `not ${r.condition}` };
+  }
+
+  /**
+   * A check now: true or false with the owner's words and level, and why: the conditions that made it so. Null when
+   * the check doesn't exist.
+   */
+  evaluateCheck(id: number): { value: boolean; text: string; level: TileLevel; why: Array<{ text: string; ieee?: string }>; check: Check } | null {
+    const check = this.deps.checks?.get(id);
+    if (!check) return null;
+    const results = check.if.conditions.map((c) => ({ c, r: this.evaluate(c, true) }));
+    const value = check.if.mode === 'all' ? results.every((x) => x.r.met) : results.some((x) => x.r.met);
+    // True: what makes it true. False: what is missing ("all" mode) or that nothing holds ("any" mode).
+    const why = results.filter((x) => x.r.met === value || (!value && check.if.mode === 'any')).map(({ c, r }) => this.conditionWords(c, r));
+    const side = value ? check.whenTrue : check.whenFalse;
+    return { value, text: side.text, level: side.level, why, check };
+  }
+
+  /** Sees sensor groups and checks that automations start on change, and fires those automations (with "for N minutes"). */
+  private checkWatched(initial = false): void {
+    if (this.stopped && !initial) return;
+    const rules = this.rules.enabled();
+    const keys = new Set<string>();
+    for (const r of rules) for (const w of r.when) if (w.type === 'sensors') keys.add(`s${w.group}`);
+    else if (w.type === 'check') keys.add(`c${w.check}`);
+    for (const key of keys) {
+      const id = Number(key.slice(1));
+      const now = key[0] === 's' ? (this.deps.sensorGroups?.value(id) ?? null) : (this.evaluateCheck(id)?.value ?? null);
+      const before = this.watched.get(key);
+      this.watched.set(key, now);
+      if (initial || before === undefined || before === now || now === null) continue;
+      for (const rule of rules) {
+        rule.when.forEach((w, i) => {
+          const matches = (w.type === 'sensors' && key === `s${w.group}`) || (w.type === 'check' && key === `c${w.check}`);
+          if (!matches) return;
+          const slot = `${rule.id}:${i}`;
+          const pending = this.holdTimers.get(slot);
+          if (pending) (clearTimeout(pending), this.holdTimers.delete(slot));
+          if ((w as { becomes: unknown }).becomes !== now) return;
+          const minutes = (w as { forMinutes?: number }).forMinutes;
+          if (!minutes) {
+            void this.fire(rule, this.describeTrigger(w), 0, { cause: w });
+            return;
+          }
+          const t = setTimeout(() => {
+            this.holdTimers.delete(slot);
+            const still = key[0] === 's' ? this.deps.sensorGroups?.value(id) : this.evaluateCheck(id)?.value;
+            if (still === now) void this.fire(rule, this.describeTrigger(w), 0, { cause: w });
+          }, minutes * 60_000);
+          t.unref?.();
+          this.holdTimers.set(slot, t);
+        });
+      }
+    }
+  }
+
+  /** An action's IF, checked now (0011): whether it holds and, if not, what isn't true, in words. */
+  checkConditions(cond: ActionIf): { met: boolean; reason: string } {
+    const results = cond.conditions.map((c) => ({ c, r: this.evaluate(c) }));
+    const met = results.length === 0 || (cond.mode === 'all' ? results.every((x) => x.r.met) : results.some((x) => x.r.met));
+    const words = results
+      .filter((x) => !x.r.met)
+      .map(({ c, r }) => (c.type === 'check' ? `"${this.describer.checkName(c.check)}" isn't ${c.is ? 'true' : 'false'}` : this.conditionWords(c, r).text));
+    return { met, reason: met ? '' : cond.mode === 'any' ? `none of these holds: ${words.join('; ')}` : words.join('; ') };
   }
 
   describeCondition(c: Condition): string {

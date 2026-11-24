@@ -47,6 +47,18 @@ await api('POST', '/api/rules', { name: 'Evening lights', enabled: true, when: [
 await api('POST', '/api/rules', { name: 'Remote: living room', enabled: true, when: [{ type: 'button', device: '0xa4c1380000000002', button: 1, press: 'single_click' }], if: undefined, then: [{ type: 'action', action: on, onlyIf: { type: 'group', group: gid, is: 'off' }, stop: true }, { type: 'action', action: off }] });
 await api('POST', '/api/rules', { name: 'Leak alarm', enabled: true, when: [{ type: 'state', device: '0x00158d0000000102', property: 'water_leak', to: true }], then: [{ type: 'notify', text: 'Water leak in the bathroom', level: 'alarm' }] });
 await api('POST', '/api/rules', { name: 'Hall light at night', enabled: true, when: [{ type: 'state', device: '0x00158d0000000103', property: 'occupancy', to: true }], if: { mode: 'all', conditions: [{ type: 'sun', is: 'dark' }] }, then: [{ type: 'device', device: '0x00158d0000000106', values: { state: 'ON' } }, { type: 'later', minutes: 5, step: { type: 'device', device: '0x00158d0000000106', values: { state: 'OFF' } } }] }).catch((e) => console.log('!', e.message));
+// Sensor group, check, device tile and an action with "Only when", for the 1.1 pages.
+const openings = await api('POST', '/api/sensor-groups', { name: 'Doors & windows', roomId: rooms['Hall'], labels: { active: 'open', inactive: 'closed' }, members: [{ ieee: '0x00158d0000000101', property: 'contact' }] });
+await soft(api('PUT', '/api/devices/0x00158d0000000107/tile', { on: true, property: 'temperature' }));
+const closedCheck = await api('POST', '/api/checks', {
+  name: 'Ready to leave',
+  roomId: rooms['Hall'],
+  if: { mode: 'all', conditions: [{ type: 'sensors', group: openings.id, is: 'none' }, { type: 'state', device: '0x00158d0000000104', property: 'lock_state', op: 'eq', value: 'locked' }] },
+  whenTrue: { text: 'Ready: closed and locked', level: 'fine' },
+  whenFalse: { text: 'Not ready', level: 'warning' },
+});
+await api('POST', '/api/actions', { name: 'Away mode', icon: 'luggage', description: 'Everything off, only when ready to leave', if: { mode: 'all', conditions: [{ type: 'check', check: closedCheck.id, is: true }] }, steps: [{ kind: 'group', group: gid, values: { state: 'OFF' } }] });
+await api('POST', '/api/rules', { name: 'Door left open', enabled: true, when: [{ type: 'sensors', group: openings.id, becomes: 'some', forMinutes: 5 }], then: [{ type: 'notify', level: 'warning', text: '{device}: {state} for {duration}' }] });
 const anna = await api('POST', '/api/members', { name: 'Anna' });
 await api('POST', '/api/members', { name: 'Tom' });
 await soft(api('POST', `/api/actions/${on}/run`));

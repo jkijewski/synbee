@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { Checks } from '../checks.js';
+import { SensorGroups } from '../sensor-groups.js';
 import { buttonEvents } from '../buttons.js';
 import { supportsFade } from '../device-kinds.js';
 import { LOCATION_KEY, Settings } from '../settings.js';
@@ -106,6 +108,11 @@ export function registerRuleRoutes(app: FastifyInstance, ctx: RouteContext): voi
         }),
       })),
       actions: actions.list().map((a) => ({ id: a.id, name: a.name })),
+      sensorGroups: (() => {
+        const sg = new SensorGroups(ctx.db, control);
+        return sg.list().map((g) => ({ id: g.id, name: g.name, words: sg.words(g) }));
+      })(),
+      checks: new Checks(ctx.db).list().map((c) => ({ id: c.id, name: c.name })),
     };
   });
 }

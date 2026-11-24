@@ -76,3 +76,6 @@ Action and rule steps SHALL be laid out on the Bootstrap grid. Each step SHALL b
 ### Requirement: Gateway light
 The header SHALL show the gateway's connection as a light, as in the gateway spec.
 
+### Requirement: Navigation
+The header SHALL list the everyday pages, Devices, Rooms, Actions, Automations, Groups (light groups and sensor groups, switched by two buttons), Checks and App users, and an Administration menu with Add devices, Import from Tuya, Gateway and Status. The tab of the page shown, or Administration while one of its pages is shown, SHALL be highlighted. Addresses of pages (`#sensors`, `#gateway`, …) SHALL keep working.
+

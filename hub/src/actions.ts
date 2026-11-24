@@ -3,8 +3,10 @@ import type { Db } from './db.js';
 import { Devices } from './devices.js';
 import { CommandError, type DeviceControl } from './ports.js';
 import { LightGroups } from './groups.js';
+import type { Condition } from './conditions.js';
 
-// User-defined actions: ordered steps that switch devices or light groups.
+// User-defined actions (0011): what a person taps. Each is its own small automation: WHEN tapped, IF its conditions
+// (optional), THEN its steps, which switch devices or light groups. Other automations can also start on a tap.
 
 export type Step =
   | { kind: 'device'; device: string; values: Record<string, unknown> }
@@ -20,14 +22,24 @@ export interface Action {
   draft: boolean;
   /** What an import couldn't translate, for the owner to check. */
   notes: string;
+  /** Conditions checked when the action is tapped; unmet, it doesn't run and says which. */
+  if: ActionIf;
   steps: Step[];
   tile: TileShow;
 }
 
+export interface ActionIf {
+  mode: 'all' | 'any';
+  conditions: Condition[];
+}
+
+/** Checks an action's conditions now: whether they hold, and, if not, what isn't true, in words. */
+export type ConditionCheck = (cond: ActionIf) => { met: boolean; reason: string };
+
 /** What an action's tile shows in the app: worked out from its steps, nothing, or one device's or group's value. */
 export type TileShow = { show: 'auto' } | { show: 'none' } | { show: 'device'; device: string; property: string } | { show: 'group'; group: number };
 
-export type ActionInput = Omit<Action, 'id' | 'tile'> & { tile?: TileShow };
+export type ActionInput = Omit<Action, 'id' | 'tile' | 'if'> & { tile?: TileShow; if?: ActionIf };
 
 /** Whether every device and group an action or rule uses is ready, and if not, what is missing. */
 export interface Readiness {
@@ -45,6 +57,8 @@ export interface RunResult {
   ok: boolean;
   failedStep?: number;
   error?: string;
+  /** Set when the action's conditions weren't met, so nothing ran: what wasn't true. */
+  notRun?: string;
   steps: StepResult[];
 }
 
@@ -73,6 +87,9 @@ function validate(input: unknown): ActionInput {
   const draft = a.draft === true;
   const notes = a.notes === undefined ? '' : a.notes;
   if (typeof notes !== 'string' || notes.length > 2000) throw new ActionError('Notes must be at most 2000 characters');
+  // The IF arrives already parsed by the rules' own parser (routes/actions.ts); here only its shape is checked.
+  const cond = a.if === undefined ? { mode: 'all', conditions: [] } : (a.if as ActionIf);
+  if (!cond || (cond.mode !== 'all' && cond.mode !== 'any') || !Array.isArray(cond.conditions) || cond.conditions.length > 10) throw new ActionError('IF holds at most 10 conditions');
   const tile = validTile(a.tile);
   if (!Array.isArray(a.steps) || a.steps.length === 0 || a.steps.length > 20) throw new ActionError('An action needs 1 to 20 steps');
   const steps: Step[] = a.steps.map((raw, i) => {
@@ -93,7 +110,7 @@ function validate(input: unknown): ActionInput {
     }
     throw new ActionError(`Step ${i + 1}: unknown step type`);
   });
-  return { name, icon, description, order, draft, notes, steps, tile };
+  return { name, icon, description, order, draft, notes, steps, tile, if: cond as ActionIf };
 }
 
 const tileJson = (t: TileShow | undefined) => (!t || t.show === 'auto' ? null : JSON.stringify(t));
@@ -110,6 +127,13 @@ function validTile(raw: unknown): TileShow {
 }
 
 export class Actions extends EventEmitter {
+  private check: ConditionCheck | null = null;
+
+  /** The rule engine's condition check, for actions with an IF (set once the engine exists). */
+  setConditionCheck(check: ConditionCheck): void {
+    this.check = check;
+  }
+
   constructor(
     private readonly db: Db,
     private readonly zigbee?: DeviceControl,
@@ -133,8 +157,8 @@ export class Actions extends EventEmitter {
     return this.tx(() => {
       const id = Number(
         this.db
-          .prepare('INSERT INTO actions (name, icon, description, sort_order, draft, notes, tile_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
-          .run(a.name, a.icon, a.description, a.order, Number(a.draft), a.notes, tileJson(a.tile)).lastInsertRowid,
+          .prepare('INSERT INTO actions (name, icon, description, sort_order, draft, notes, tile_json, if_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+          .run(a.name, a.icon, a.description, a.order, Number(a.draft), a.notes, tileJson(a.tile), ifJson(a.if)).lastInsertRowid,
       );
       this.writeSteps(id, a.steps);
       return this.get(id)!;
@@ -146,8 +170,8 @@ export class Actions extends EventEmitter {
     const a = validate(input);
     return this.tx(() => {
       this.db
-        .prepare('UPDATE actions SET name = ?, icon = ?, description = ?, sort_order = ?, draft = ?, notes = ?, tile_json = ? WHERE id = ?')
-        .run(a.name, a.icon, a.description, a.order, Number(a.draft), a.notes, tileJson(a.tile), id);
+        .prepare('UPDATE actions SET name = ?, icon = ?, description = ?, sort_order = ?, draft = ?, notes = ?, tile_json = ?, if_json = ? WHERE id = ?')
+        .run(a.name, a.icon, a.description, a.order, Number(a.draft), a.notes, tileJson(a.tile), ifJson(a.if), id);
       this.db.prepare('DELETE FROM action_steps WHERE action_id = ?').run(id);
       this.writeSteps(id, a.steps);
       return this.get(id)!;
@@ -162,6 +186,12 @@ export class Actions extends EventEmitter {
   async run(id: number, context: { hops?: number; source?: string } = {}): Promise<RunResult> {
     const action = this.get(id);
     if (!action) throw new ActionError('Unknown action', 404);
+    // Its IF first: unmet, nothing runs, and the person who tapped is told what wasn't true.
+    if (action.if.conditions.length > 0) {
+      if (!this.check) return { ok: false, notRun: 'its conditions can\'t be checked now', error: "Not run: its conditions can't be checked now", steps: [] };
+      const c = this.check(action.if);
+      if (!c.met) return { ok: false, notRun: c.reason, error: `Not run: ${c.reason}`, steps: [] };
+    }
     const results: StepResult[] = [];
     for (const [i, step] of action.steps.entries()) {
       try {
@@ -219,6 +249,7 @@ export class Actions extends EventEmitter {
       order: r.sort_order as number,
       draft: r.draft === 1,
       notes: (r.notes as string) ?? '',
+      if: r.if_json ? (JSON.parse(r.if_json as string) as ActionIf) : { mode: 'all', conditions: [] },
       steps,
       tile: r.tile_json ? (JSON.parse(r.tile_json as string) as TileShow) : { show: 'auto' },
     };
@@ -254,3 +285,5 @@ export function stepReadiness(db: Db, steps: Array<{ kind: string; device?: stri
   }
   return { ready: missing.size === 0, missing: [...missing] };
 }
+
+const ifJson = (i: ActionIf | undefined): string | null => (i && i.conditions.length > 0 ? JSON.stringify(i) : null);

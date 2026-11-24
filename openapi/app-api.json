@@ -287,6 +287,14 @@
                     "rooms": {
                       "type": "integer",
                       "description": "How many rooms the member may see"
+                    },
+                    "mayPauseAlerts": {
+                      "type": "boolean",
+                      "description": "Whether this member may pause alerts"
+                    },
+                    "alertsPaused": {
+                      "$ref": "#/components/schemas/AlertPause",
+                      "description": "The pause in force, or null"
                     }
                   },
                   "required": [
@@ -474,6 +482,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "tiles": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StatusTile"
+                      },
+                      "description": "Read-only status tiles: devices the owner picked, sensor groups and checks"
                     }
                   },
                   "required": [
@@ -759,11 +774,91 @@
         }
       }
     },
+    "/api/app/v1/alerts/pause": {
+      "post": {
+        "operationId": "pauseAlerts",
+        "summary": "Pause alerts for a while, or resume",
+        "description": "For members the owner allows (`mayPauseAlerts` in /me); others get 403. While paused, nothing is sent to Synology Chat; SynBee's own inbox still records every notification.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "minutes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1440,
+                    "description": "How long; 0 resumes"
+                  }
+                },
+                "required": [
+                  "minutes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "paused": {
+                      "$ref": "#/components/schemas/AlertPause"
+                    }
+                  },
+                  "required": [
+                    "paused"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/app/v1/actions/{id}/run": {
       "post": {
         "operationId": "runAction",
         "summary": "Run an action",
-        "description": "Drafts and actions the member may not run answer 404, like missing ones.",
+        "description": "Drafts and actions the member may not run answer 404, like missing ones. An action whose conditions (its IF) aren't met doesn't run: `ok` is false and `notRun` says what wasn't true.",
         "parameters": [
           {
             "name": "id",
@@ -791,7 +886,12 @@
                       "description": "The step that failed, from 1"
                     },
                     "error": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "What went wrong, in words to show the user"
+                    },
+                    "notRun": {
+                      "type": "string",
+                      "description": "Set when the action's conditions weren't met, so nothing ran: what wasn't true, e.g. \"Roof window is Open\""
                     }
                   },
                   "required": [
@@ -981,6 +1081,94 @@
           "readings",
           "battery",
           "lastSeen"
+        ],
+        "additionalProperties": false
+      },
+      "StatusTile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "\"device:<ieee>\", \"sensors:<id>\" or \"check:<id>\""
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "device",
+              "sensors",
+              "check"
+            ]
+          },
+          "room": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The room whose page shows it; null for \"Other\""
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "description": "A Material Symbols icon name"
+          },
+          "text": {
+            "type": "string",
+            "description": "Its state in words, e.g. \"All closed\" or \"21.4 °C\""
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "fine",
+              "info",
+              "warning",
+              "alarm"
+            ],
+            "description": "How it is coloured"
+          },
+          "color": {
+            "type": "string",
+            "description": "A colour hint as #rrggbb, e.g. a temperature from blue to red"
+          },
+          "why": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The explanation shown on a long press, line by line"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "room",
+          "name",
+          "icon",
+          "text",
+          "level",
+          "why"
+        ],
+        "additionalProperties": false
+      },
+      "AlertPause": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "until": {
+            "type": "integer",
+            "description": "Until when, in ms since 1970"
+          },
+          "by": {
+            "type": "string",
+            "description": "Who paused, e.g. \"Anna (Pixel 8)\""
+          }
+        },
+        "required": [
+          "until",
+          "by"
         ],
         "additionalProperties": false
       },

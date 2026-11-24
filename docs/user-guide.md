@@ -17,11 +17,12 @@ SynBee turns your Synology NAS into the hub of your smart home. It switches Zigb
 9. [Light groups](#9-light-groups)
 10. [Actions: one tap for several devices](#10-actions-one-tap-for-several-devices)
 11. [Automations: WHEN, IF, THEN](#11-automations-when-if-then)
-12. [The phone app for your family](#12-the-phone-app-for-your-family)
-13. [Attention, notifications and history](#13-attention-notifications-and-history)
-14. [Keep your gateway safe](#14-keep-your-gateway-safe)
-15. [Backups, updates and the Status page](#15-backups-updates-and-the-status-page)
-16. [Questions and problems](#16-questions-and-problems)
+12. [Sensor groups and checks: is everything OK?](#12-sensor-groups-and-checks-is-everything-ok)
+13. [The phone app for your family](#13-the-phone-app-for-your-family)
+14. [Alerts on your phone, and notifications](#14-alerts-on-your-phone-and-notifications)
+15. [Keep your gateway safe](#15-keep-your-gateway-safe)
+16. [Backups, updates and the Status page](#16-backups-updates-and-the-status-page)
+17. [Questions and problems](#17-questions-and-problems)
 
 ---
 
@@ -44,11 +45,14 @@ The words you will meet in SynBee:
 - **Light group:** several lights switched together, in one radio message.
 - **Action:** a named list of steps, such as "Movie time: living room lights to 15 %, warm". You run it with one tap, from the browser or the phone app.
 - **Automation:** a rule that runs by itself: **WHEN** something happens, **IF** something is true, **THEN** do some steps. For example: when the hall motion sensor sees movement, if it is dark, turn on the hall light for 5 minutes.
-- **App user:** a person who uses the phone app. You choose what each may use.
+- **Sensor group:** several yes/no sensors of one kind read as one state, such as "Windows: all closed".
+- **Check:** a statement you define, such as "Ready to leave" or "OK to heat", built from conditions. It is true or false, in your own words.
+- **Status tile:** a tile in the phone app that shows how something is ("21.4 °C", "Windows: all closed"), next to the actions.
+- **App user:** a person who uses the phone app. You choose what each may use and see.
 
 **Nothing leaves your network.**¹ SynBee needs no account, no cloud and no internet connection. Your devices and automations keep working when the internet is down.
 
-¹ Except when you choose to use the phone app away from home: then the app's requests travel over the internet to your NAS, encrypted and accepted only by your own SynBee ([section 12](#using-the-app-away-from-home)).
+¹ Except when you choose to use the phone app away from home: then the app's requests travel over the internet to your NAS, encrypted and accepted only by your own SynBee ([section 13](#using-the-app-away-from-home)), and, if you set up alerts to Synology Chat, the notification Synology's push service delivers to your phone ([section 14](#alerts-on-your-phone-through-synology-chat)).
 
 ## 2. What you need
 
@@ -79,13 +83,17 @@ The first time, SynBee asks you to **choose an admin password** (at least 10 cha
 
 ![The sign-in page](images/guide/sign-in.png)
 
+The bar at the top has the everyday pages: **Devices, Rooms, Actions, Automations, Groups, Checks** and **App users**. Setting up the hub is under **Administration**: **Add devices, Import from Tuya, Gateway** and **Status**.
+
+<img src="images/guide/administration-menu.png" alt="The Administration menu" width="640">
+
 > **Forgot the password?** In Package Center, install the SynBee package again (or a newer one) and tick **Reset the hub's admin password** in the wizard. Your devices, actions and automations are kept.
 
 SynBee works only on your home network. Opening it from outside your home is refused, on purpose.
 
 ## 5. Connect the gateway
 
-Open **Gateway**. When SynBee reaches your gateway, it shows **connected** in green, and the **Gateway** light in the top right corner of every page is green too.
+Open **Administration → Gateway**. When SynBee reaches your gateway, it shows **connected** in green, and the **Gateway** light in the top right corner of every page is green too.
 
 ![The Gateway page](images/guide/gateway.png)
 
@@ -94,13 +102,13 @@ Here you see your Zigbee network: its address, firmware, radio channel and the n
 Do two things right after connecting:
 
 1. **Download a backup.** Under **Coordinator backup → Download a copy**, choose a passphrase (at least 12 characters), enter your admin password, tick that you understand the file holds your network's key, and download. Keep the file somewhere other than the NAS (a USB stick, your computer). If the NAS or the gateway ever breaks, this file brings your whole Zigbee network back, without pairing every device again.
-2. **Make the gateway safe:** see [section 14](#14-keep-your-gateway-safe).
+2. **Make the gateway safe:** see [section 15](#15-keep-your-gateway-safe).
 
 > **Only one program may use the gateway.** If anything else was connected to it (Home Assistant, another Zigbee2MQTT), switch that off first.
 
 ## 6. Add devices
 
-Open **Add devices**, choose how long to wait (10 minutes is plenty), and press **Start waiting**. Then put your device in pairing mode, as its manual says: usually by holding its button for 5 seconds, or switching a bulb on and off a few times.
+Open **Administration → Add devices**, choose how long to wait (10 minutes is plenty), and press **Start waiting**. Then put your device in pairing mode, as its manual says: usually by holding its button for 5 seconds, or switching a bulb on and off a few times.
 
 ![Adding devices](images/guide/add-devices.png)
 
@@ -151,7 +159,7 @@ A sensor's page shows its readings and their history:
 
 ## 9. Light groups
 
-A **light group** switches several lights together, in one radio message, so they change at the same moment. Open **Light groups** and choose **New group**, or use **Make a light group of its lights** on the Rooms page.
+A **light group** switches several lights together, in one radio message, so they change at the same moment. Open **Groups → Light groups** and choose **New group**, or use **Make a light group of its lights** on the Rooms page.
 
 ![Light groups](images/guide/light-groups.png)
 
@@ -171,6 +179,10 @@ To create one:
 4. **Save**, then press **Run** to try it.
 
 Steps run in order. If a device doesn't answer, the action stops there and tells you which device it was.
+
+**Only when.** An action can check something before it runs. Under **Only when (IF)** on the action's page, add conditions, the same as in automations: a device's value, a sensor group, a check, the time, whether it is dark. If they don't hold when someone taps the action, nothing runs, and they see why, for example "Not run: "Ready to leave" isn't true".
+
+<img src="images/guide/action-only-when.png" alt="An action that runs only when a check is true" width="640">
 
 Actions are also how your family switches things from the phone app, and automations can run them too. So define a scene once, as an action, and use it everywhere.
 
@@ -206,18 +218,62 @@ An **automation** runs by itself. It reads like a sentence:
 | A device changes ("and stays so for 10 minutes") | A time window, or certain weekdays | Wait some seconds |
 | A time of day, on chosen weekdays | It is dark, or light | Start a timer (auto-off) |
 | Sunrise or sunset, earlier or later | A light group is on, off or partly on | Run an action |
-| Every N minutes | | Send yourself a notification |
-| An action is run, or another automation's event | | Send an event to another automation |
+| Every N minutes | A sensor group is all closed, some open, all open | Send yourself a notification |
+| An action is run, or another automation's event | A check is true, or false | Send an event to another automation |
+| A sensor group changes ("and stays so for 5 minutes") | | |
+| A check becomes true or false ("and stays so for 10 minutes") | | |
 
 - **Each step can have its own "only if".** Together with **then stop**, one remote button can switch a light on when it's off, and off when it's on:
 
   <img src="images/guide/automation-editor.png" alt="A remote button that switches the living room on and off" width="640">
 
 - **Look like someone is home:** times and sunset can move by a random amount each day, up to an hour.
-- **Sunrise and sunset** are calculated on the NAS from your home's location, which you set once on the **Status** page. No internet is needed.
+- **Sunrise and sunset** are calculated on the NAS from your home's location, which you set once on **Administration → Status**. No internet is needed.
+- **Notification texts can say what happened.** Write, for example, "{device} is {state} for {duration}" and it arrives as "Balcony door is Open for 5 min". You can use {device}, {state}, {duration}, {check}, {why}, {rule} and {time}.
 - **History:** each automation keeps a list of its recent runs: when, why, and what each step did, or why it was skipped. If an automation didn't do what you expected, look there first.
 
-## 12. The phone app for your family
+## 12. Sensor groups and checks: is everything OK?
+
+### Sensor groups
+
+A **sensor group** reads several yes/no sensors of one kind as one state: all your window contacts, every leak sensor, all door locks. Open **Groups → Sensor groups → New sensor group**, give it a name, and tick its sensors.
+
+<img src="images/guide/sensor-group-editor.png" alt="Editing a sensor group" width="640">
+
+- It reads in words: one sensor as its state ("Closed"), several as "All closed", "All 3 open" or "2 of 5 open: Kitchen, Hall".
+- **Words:** write your own words for the two states, such as "otwarte" and "zamknięte". Left empty, SynBee uses the sensor's own ("open" / "closed", "wet" / "dry").
+- **In the app:** choose the room whose page shows it as a tile, and which people see it.
+
+### Checks
+
+A **check** is a statement you define from conditions, such as "Ready to leave: all doors and windows closed and the front door locked". Open **Checks → New check**:
+
+1. Give it a name, such as "Ready to leave".
+2. Under **True when**, add its conditions: a sensor group ("Doors & windows is all closed"), a device's value ("Door lock is locked"), the time, whether it is dark…
+3. Under **What it means**, write what true and false mean to you, and how each looks: fine (green), info (grey), warning (orange) or alarm (red). For example true "Ready: closed and locked" (fine), false "Not ready" (warning).
+4. Choose the room for its tile in the app, and who sees it.
+
+<img src="images/guide/check-editor.png" alt="Editing a check" width="640">
+
+The Checks page shows each check's state now, and why:
+
+![Checks](images/guide/checks.png)
+
+Use checks everywhere:
+
+- **As a tile** in the phone app, in your words and colours.
+- **In automations:** "WHEN Ready to leave becomes false and stays so for 10 minutes, THEN notify me".
+- **In an action's Only when:** "Away mode" runs only when "Ready to leave" is true, and otherwise says why.
+
+### Status tiles for single devices
+
+On a device's page, under **In the app**, tick **Show as a status tile in its room** and choose what it shows: its summary or one reading.
+
+- **Yes/no readings** (a door, a leak) can have your own words for their two states.
+- **Numbers** show with their unit. Temperatures are coloured from blue (cold) through green to red (hot); CO₂, fine dust and a low battery turn orange or red when they need attention.
+- Choose who sees it under **In the app, for**.
+
+## 13. The phone app for your family
 
 The **SynBee app for Android** shows each person their rooms and actions, as tiles to tap. It can't change any settings: you decide everything here.
 
@@ -234,7 +290,9 @@ You can also type the address and the code shown under the QR code instead of sc
 
 ### Choose what each person may use
 
-Open **What … may use** under a person. Everything is allowed until you untick it: a whole room, or single actions. A device is visible when its room is. New rooms and actions are allowed automatically.
+Open **What … may use** under a person. Everything is allowed until you untick it: a whole room, or single actions. A device is visible when its room is. New rooms and actions are allowed automatically. Status tiles have their own **In the app, for** ticks, on the page of each device, sensor group and check.
+
+Tick **May pause alerts from the app** for people who may silence your alerts for a while (see the next section).
 
 ### A lost phone
 
@@ -251,18 +309,34 @@ At home, the app talks to SynBee over your Wi-Fi. To use it on mobile data too, 
 
 With this on, the app's requests travel over the internet to your NAS, encrypted, and are accepted only from paired phones. Everything else stays in your network, and the web interface stays home-only.
 
-## 13. Attention, notifications and history
+## 14. Alerts on your phone, and notifications
 
 - **Needs attention** at the top of the Devices page lists alarms (water leak, smoke, gas), warnings (low battery, tampering, an unlocked lock) and devices that stopped answering.
 - **The bell** in the top right corner opens your notifications: alarms, a lost gateway, and the notifications your automations send. It turns red when an alarm is unread.
 
 ![Notifications](images/guide/notifications.png)
 
+### Alerts on your phone through Synology Chat
+
+SynBee can send its notifications to a channel in **Synology Chat**, which runs on your NAS; the Synology Chat app then shows them on your phone at once.
+
+1. Install **Synology Chat Server** from Package Center, and the **Synology Chat** app on your phone.
+2. In Chat, create a channel, such as "Home alerts". Click your profile picture → **Integration → Incoming Webhooks → Create**, choose the channel, and copy the **Webhook URL**.
+3. In SynBee, open the bell → **Send alerts to Synology Chat**, paste the URL, choose what to send (alarms only, warnings and alarms, or everything), and **Save**. Press **Send a test**.
+
+From then on, alarms, a lost gateway and your automations' notifications at that level arrive in Chat. SynBee keeps every notification in its own list too. The Chat app's notification reaches your phone through Synology's push service, like the notifications of Synology's other apps; the message itself stays in Chat on your NAS.
+
+**Pausing alerts.** People you allow (App users → **May pause alerts from the app**) can pause alerts in their app for an hour, eight hours or until 7:00. While paused, nothing goes to Chat; the Notifications page says who paused and until when, with **Resume now**.
+
+### Example: the balcony door left open
+
+WHEN the balcony door **becomes Open** and **stays so for 5 minutes**, THEN **Send a notification**, level **Warning**, text "{device} is {state} for {duration}". If you close the door sooner, nothing is sent.
+
 - **History:** every sensor reading is kept, for two years as hourly averages. Open a device to see its graphs. Devices that measure energy show kWh per day, and the Devices page shows your total.
 
-## 14. Keep your gateway safe
+## 15. Keep your gateway safe
 
-A network gateway obeys anyone on your network who connects to it, and its own web page may have no password. On **Gateway → Harden gateway security**, SynBee helps you close those doors:
+A network gateway obeys anyone on your network who connects to it, and its own web page may have no password. On **Administration → Gateway → Harden gateway security**, SynBee helps you close those doors:
 
 1. On the gateway's own web page (link on the card), set a **password** for its web page, under Security.
 2. In SynBee, enter that login under **Let SynBee set these for you** and choose **Use this login**. SynBee keeps it privately on the NAS.
@@ -274,7 +348,7 @@ A network gateway obeys anyone on your network who connects to it, and its own w
 
 If SynBee loses the connection to the gateway, the Gateway light turns red, and after two minutes you get a notification.
 
-## 15. Backups, updates and the Status page
+## 16. Backups, updates and the Status page
 
 ![The Status page](images/guide/status.png)
 
@@ -282,9 +356,10 @@ If SynBee loses the connection to the gateway, the Gateway light turns red, and 
 - **Your Zigbee network** (the gateway's backup, with its key) is not in that folder, on purpose. Download it from the Gateway page after setting up, and again after adding many devices.
 - **Updating SynBee:** download a gateway backup first. Then install the newer package with **Manual Install**. Everything is kept. Before changing anything, SynBee saves a copy of its database and of the Zigbee data; **Status → Upgrades and safety copies** lists them and explains how to go back.
 - **Location:** set your home's approximate location on the Status page, for sunrise and sunset automations.
+- **Units:** choose whether temperatures show in Celsius or Fahrenheit, in the app, its tiles and your notification texts.
 - **Logs:** if something misbehaves, the Status page shows the logs of SynBee and of the Zigbee radio, with keys and passwords hidden.
 
-## 16. Questions and problems
+## 17. Questions and problems
 
 **A device doesn't join.** Make sure Add devices is waiting, and the device is close to the gateway or a mains-powered device. Reset it again as its manual says. Some devices need the button held for 10 seconds or more.
 
@@ -293,6 +368,10 @@ If SynBee loses the connection to the gateway, the Gateway light turns red, and 
 **A device stopped answering.** Check its power or batteries. Battery devices report only now and then, so they may look quiet for a while. A mains-powered device far from others may need a plug or bulb in between.
 
 **The Gateway light is red.** Check that the gateway has power and its network cable, and that its address hasn't changed. On the Gateway page, **Restart Zigbee connection**.
+
+**An action says "Not run".** Its **Only when** conditions didn't hold; the message says which. Change the conditions on the action's page if they're not what you want.
+
+**No alert arrives in Synology Chat.** Press **Send a test** on the Notifications page. If it fails, the message says why; if it works, check the level you chose, and whether someone paused alerts.
 
 **An automation didn't run.** Open it and look at its history: it says whether it ran, was skipped (and which condition wasn't met), or failed (and which device didn't answer).
 

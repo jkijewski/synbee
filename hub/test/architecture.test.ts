@@ -43,6 +43,11 @@ const OWNERS: Record<string, string[]> = {
   member_revoked_rooms: ['members.ts'],
   member_phones: ['members.ts'],
   member_pairing_codes: ['members.ts'],
+  member_hidden_tiles: ['members.ts'],
+  sensor_groups: ['sensor-groups.ts'],
+  sensor_group_members: ['sensor-groups.ts'],
+  checks: ['checks.ts'],
+  device_tiles: ['tiles.ts'],
 };
 
 /** Pure modules: no storage, network, processes or adapters, so the web UI can share them. */

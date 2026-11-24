@@ -1,4 +1,5 @@
 import type { Action } from './actions.js';
+import { inUnit, temperatureUnit } from './units.js';
 import type { Db } from './db.js';
 import { flattenExposes, type ExposedProperty } from './exposes.js';
 import { actionState, stepMatches, type ActionState, type StepMatch } from './features/action-state.js';
@@ -46,16 +47,23 @@ export class DeviceViews {
       | { name: string; room: string | null }
       | undefined;
     const seen = state.last_seen;
+    // Temperatures in the owner's unit (devices report Celsius).
+    const unit = temperatureUnit(this.db);
     return {
       ieee,
       name: row?.name ?? ieee,
       room: row?.room ?? null,
       online: this.control?.isOnline(ieee) ?? null,
-      summary,
-      readings,
+      summary: inUnit(summary, unit),
+      readings: readings.map((r) => ({ ...r, text: inUnit(r.text, unit) })),
       battery: typeof state.battery === 'number' ? state.battery : null,
       lastSeen: typeof seen === 'string' ? seen : typeof seen === 'number' ? new Date(seen).toISOString() : null,
     };
+  }
+
+  /** A device's raw value of one property, as it reported it. */
+  value(ieee: string, property: string): unknown {
+    return this.control?.deviceState(ieee)?.[property];
   }
 
   /** The devices of a room (main room and "also shown here"), lights first, then switches, sensors and the rest. */

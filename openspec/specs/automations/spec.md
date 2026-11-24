@@ -71,7 +71,7 @@ A step SHALL be able to send a named event, and a rule SHALL be able to start on
 - **THEN** the chain stops at the hop limit, and both histories show it was stopped
 
 ### Requirement: Conditions
-The IF part SHALL hold zero or more conditions on device states, a time window or weekdays, combined with either "all of" or "any of", with no nesting. With no conditions, the rule always continues to its steps.
+The IF part SHALL hold zero or more conditions on device states, a time window, weekdays, dark or light, light groups, sensor groups or checks (see the [status and alerts spec](../status-and-alerts/spec.md)), combined with either "all of" or "any of", with no nesting. With no conditions, the rule always continues to its steps.
 
 #### Scenario: Condition not met
 - **GIVEN** a rule with the condition "biurko robocze is off"
@@ -148,7 +148,7 @@ A value or threshold event SHALL optionally require the device to stay so for 1 
 - **AND** it doesn't run if the door closes within the 5 minutes
 
 ### Requirement: Notify step
-A rule step SHALL send a notification with a level (info, warning, alarm) and a text to the hub's inbox and to any further channels. The same notification within 10 minutes SHALL be counted as a repeat, and at most 60 new notifications an hour SHALL be kept, except alarms.
+A rule step SHALL send a notification with a level (info, warning, alarm) and a text, with placeholders filled in when sent, to the hub's inbox and to Synology Chat when it is set up (see the [status and alerts spec](../status-and-alerts/spec.md)). The same notification within 10 minutes SHALL be counted as a repeat, and at most 60 new notifications an hour SHALL be kept, except alarms.
 
 ### Requirement: Sunrise and sunset
 A rule SHALL be able to start at sunrise or sunset at the home's location, up to 240 minutes before or after, on chosen weekdays, and a condition SHALL be able to check whether it is dark (sunset to sunrise). Sun times SHALL be computed on the hub, without an internet service. Without a home location, sun events SHALL NOT run, "it is dark" SHALL NOT be true, and the rule SHALL show a warning.

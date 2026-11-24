@@ -10,6 +10,7 @@ import { EnergyCard } from '../history/EnergyCard';
 import { HistoryChart } from '../history/HistoryChart';
 import { RoomSelect } from './RoomPickers';
 import { useApi } from '../useApi';
+import { MemberAccess } from '../MemberAccess';
 
 // One device: controls, settings, rooms, icon, channel labels and related items.
 export function DeviceView({ ieee, onBack }: { ieee: string; onBack: () => void }) {
@@ -238,6 +239,7 @@ export function DeviceView({ ieee, onBack }: { ieee: string; onBack: () => void 
           }
         />
       </div>
+      <TileCard ieee={ieee} properties={device.properties} labels={device.labels} />
       <ChannelLabels device={device} onSaved={load} />
       <Related kind="device" id={ieee} refresh={device} />
       <div className="card card-body mb-3">
@@ -313,6 +315,50 @@ function PropertyTable({ properties, device, send }: { properties: Property[]; d
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Whether this device shows as a status tile in its room in the app, which reading, your words, and for whom. */
+function TileCard({ ieee, properties, labels }: { ieee: string; properties: DeviceDetail['properties']; labels?: Record<string, string> }) {
+  const tiles = useApi<Array<{ ieee: string; property: string | null; labels: { active: string; inactive: string } }>>('/api/device-tiles');
+  const [error, setError] = useState('');
+  const [words, setWords] = useState<{ active: string; inactive: string } | null>(null);
+  const tile = tiles.data?.find((t) => t.ieee === ieee);
+  const readings = properties.filter((p) => p.readable && !p.category && p.property !== 'linkquality');
+  const binary = readings.find((p) => p.property === tile?.property)?.type === 'binary';
+  const shownWords = words ?? tile?.labels ?? { active: '', inactive: '' };
+  const set = (on: boolean, property: string | null, w = shownWords) =>
+    void api('PUT', `/api/devices/${ieee}/tile`, { on, property, labels: w }).then(() => (setWords(null), tiles.reload()), (e: ApiError) => setError(e.message));
+  return (
+    <div className="card card-body mb-3">
+      <h3>In the app</h3>
+      <div className="line">
+        <label className="line mb-0">
+          <input className="form-check-input" type="checkbox" checked={Boolean(tile)} onChange={(e) => set(e.target.checked, tile?.property ?? null)} />
+          Show as a status tile in its room, showing
+        </label>
+        <select className="form-select form-select-sm" style={{ width: 'auto' }} aria-label="Reading" disabled={!tile} value={tile?.property ?? ''} onChange={(e) => set(true, e.target.value || null)}>
+          <option value="">its summary</option>
+          {readings.map((p) => (
+            <option key={p.property} value={p.property}>
+              {propertyLabel(p, labels)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {tile && binary && (
+        <div className="line mt-2">
+          <span className="small">Your words:</span>
+          <input className="form-control form-control-sm" style={{ maxWidth: '10rem' }} maxLength={30} placeholder="active, e.g. Otwarte" aria-label="Word when active" value={shownWords.active} onChange={(e) => setWords({ ...shownWords, active: e.target.value })} />
+          <input className="form-control form-control-sm" style={{ maxWidth: '10rem' }} maxLength={30} placeholder="not active, e.g. Zamknięte" aria-label="Word when not active" value={shownWords.inactive} onChange={(e) => setWords({ ...shownWords, inactive: e.target.value })} />
+          <button className="btn btn-outline-secondary btn-sm" disabled={!words} onClick={() => set(true, tile.property)}>
+            Save words
+          </button>
+        </div>
+      )}
+      {tile && <MemberAccess kind="tile" id={`device:${ieee}`} />}
+      {error && <p className="text-danger small mb-0 mt-1">{error}</p>}
     </div>
   );
 }

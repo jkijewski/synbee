@@ -25,6 +25,8 @@ export interface Member {
   revokedRooms: number[];
   /** Whether devices without a main room are visible. */
   devicesWithoutRoom: boolean;
+  /** May pause alerts from the app (off until the owner allows it). */
+  mayPauseAlerts: boolean;
   phones: Phone[];
   /** When the member's current pairing code expires, if one is waiting. */
   pairingUntil: number | null;
@@ -74,7 +76,7 @@ export class Members {
   }
 
   get(id: number): Member | null {
-    const row = this.db.prepare('SELECT id, name, no_room_allowed FROM members WHERE id = ?').get(id) as { id: number; name: string; no_room_allowed: number } | undefined;
+    const row = this.db.prepare('SELECT id, name, no_room_allowed, may_pause_alerts FROM members WHERE id = ?').get(id) as { id: number; name: string; no_room_allowed: number; may_pause_alerts: number } | undefined;
     if (!row) return null;
     const ids = (sql: string) => (this.db.prepare(sql).all(id) as Array<{ x: number }>).map((r) => r.x);
     const phones = this.db
@@ -87,6 +89,7 @@ export class Members {
       revokedActions: ids('SELECT action_id AS x FROM member_revoked_actions WHERE member_id = ? ORDER BY action_id'),
       revokedRooms: ids('SELECT room_id AS x FROM member_revoked_rooms WHERE member_id = ? ORDER BY room_id'),
       devicesWithoutRoom: row.no_room_allowed === 1,
+      mayPauseAlerts: row.may_pause_alerts === 1,
       phones: phones.map((p) => ({ ...p, outside: p.outside === 1 })),
       pairingUntil: code?.expires_at ?? null,
     };
@@ -126,6 +129,14 @@ export class Members {
       for (const r of rooms) if (addRoom.run(id, r).changes === 0) throw new MemberError(`Unknown room ${r}`);
       if (input.devicesWithoutRoom !== undefined) this.db.prepare('UPDATE members SET no_room_allowed = ? WHERE id = ?').run(Number(input.devicesWithoutRoom), id);
     });
+    return this.get(id)!;
+  }
+
+  /** Allows or forbids a member to pause alerts from the app. */
+  setMayPauseAlerts(id: number, allowed: unknown): Member {
+    this.require(id);
+    if (typeof allowed !== 'boolean') throw new MemberError('allowed is true or false');
+    this.db.prepare('UPDATE members SET may_pause_alerts = ? WHERE id = ?').run(Number(allowed), id);
     return this.get(id)!;
   }
 
@@ -214,6 +225,31 @@ export class Members {
       this.db.prepare(`INSERT INTO ${table} (member_id, ${column}) SELECT id, ? FROM members ${others}`).run(itemId, ...ids);
     });
     return this.access(kind, itemId);
+  }
+
+  /** Whether a member sees a status tile ("sensors:3", "check:2", "device:0x…"): yes until the owner hides it. */
+  tileAllowed(memberId: number, tile: string): boolean {
+    return !this.db.prepare('SELECT 1 FROM member_hidden_tiles WHERE member_id = ? AND tile = ?').get(memberId, tile);
+  }
+
+  /** Every member, and whether each sees this status tile. */
+  tileAccess(tile: string): Array<{ id: number; name: string; allowed: boolean }> {
+    return (this.db.prepare('SELECT id, name FROM members ORDER BY name COLLATE NOCASE').all() as Array<{ id: number; name: string }>).map((m) => ({
+      ...m,
+      allowed: this.tileAllowed(m.id, tile),
+    }));
+  }
+
+  /** Sets which members see a status tile: those listed do, every other member doesn't. */
+  setTileAccess(tile: string, allowed: unknown): Array<{ id: number; name: string; allowed: boolean }> {
+    if (!/^(device:0x[0-9a-f]{16}|sensors:\d{1,9}|check:\d{1,9})$/.test(tile)) throw new MemberError('Unknown tile', 404);
+    const ids = idList(allowed, 'Allowed members');
+    transaction(this.db, () => {
+      this.db.prepare('DELETE FROM member_hidden_tiles WHERE tile = ?').run(tile);
+      const others = ids.length ? `WHERE id NOT IN (${ids.map(() => '?').join(',')})` : '';
+      this.db.prepare(`INSERT INTO member_hidden_tiles (member_id, tile) SELECT id, ? FROM members ${others}`).run(tile, ...ids);
+    });
+    return this.tileAccess(tile);
   }
 
   private require(id: number): void {

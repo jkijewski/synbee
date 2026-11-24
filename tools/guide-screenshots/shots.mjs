@@ -13,8 +13,18 @@ await b.go(base, 2000);
 await shot('sign-in');
 await b.eval(`fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: ${JSON.stringify(fs.readFileSync(pwFile, 'utf8'))} }) }).then((r) => r.status)`).then((s) => console.log('login', s));
 await b.send('Page.reload'); await b.sleep(2000);
-const pages = [['devices', 'devices'], ['devices/0x60a423fffe000001', 'device-light', true], ['devices/0x00158d0000000107', 'device-sensor', true], ['rooms', 'rooms'], ['actions', 'actions'], ['rules', 'automations'], ['rules/2', 'automation-editor', true], ['rules/4', 'automation-timer', true], ['groups', 'light-groups'], ['pairing', 'add-devices'], ['gateway', 'gateway', true], ['status', 'status', true], ['notifications', 'notifications']];
+const pages = [['devices', 'devices'], ['devices/0x60a423fffe000001', 'device-light', true], ['devices/0x00158d0000000107', 'device-sensor', true], ['rooms', 'rooms'], ['actions', 'actions'], ['rules', 'automations'], ['rules/2', 'automation-editor', true], ['rules/4', 'automation-timer', true], ['groups', 'light-groups'], ['sensors', 'sensor-groups'], ['checks', 'checks'], ['actions/5', 'action-only-when', true], ['rules/5', 'automation-sensor-group', true], ['pairing', 'add-devices'], ['gateway', 'gateway', true], ['status', 'status', true], ['notifications', 'notifications']];
 for (const [hash, name, full] of pages) { await b.go(`${base}/#${hash}`, 2200); await shot(name, full); }
+// Editors and menus opened by a click: sensor group and check editors, the Administration menu.
+const clickShot = async (hash, button, name, full = true) => {
+  await b.go(`${base}/#${hash}`, 2200);
+  await b.eval(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(button)})?.click()`);
+  await b.sleep(1200);
+  await shot(name, full);
+};
+await clickShot('sensors', 'Edit', 'sensor-group-editor');
+await clickShot('checks', 'Edit', 'check-editor');
+await clickShot('devices', 'Administration', 'administration-menu', false);
 await b.go(`${base}/#members`, 2200);
 await b.eval(`[...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Pair a phone')?.click()`);
 await b.sleep(1500);

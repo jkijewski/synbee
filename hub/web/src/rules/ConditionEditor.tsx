@@ -3,7 +3,9 @@ import { ValueInput } from '../Values';
 import { defaultCondition, DeviceSelect, Days, readable } from './RuleParts';
 
 // IF: one condition that must hold.
-export function ConditionEditor({ condition: c, choices, onChange }: { condition: Condition; choices: Choices; onChange: (c: Condition) => void }) {
+export function ConditionEditor({ condition: c, choices, onChange, noChecks }: { condition: Condition; choices: Choices; onChange: (c: Condition) => void; noChecks?: boolean }) {
+  const sensorGroups = choices.sensorGroups ?? [];
+  const checks = noChecks ? [] : (choices.checks ?? []);
   const devices = choices.devices.filter((d) => readable(d).length > 0);
   return (
     <div className="line">
@@ -16,11 +18,15 @@ export function ConditionEditor({ condition: c, choices, onChange }: { condition
           else if (type === 'time') onChange({ type: 'time', from: '18:00', to: '23:00' });
           else if (type === 'sun') onChange({ type: 'sun', is: 'dark' });
           else if (type === 'group') onChange({ type: 'group', group: choices.groups[0]?.id ?? 0, is: 'on' });
+          else if (type === 'sensors') onChange({ type: 'sensors', group: sensorGroups[0]?.id ?? 0, is: 'none' });
+          else if (type === 'check') onChange({ type: 'check', check: checks[0]?.id ?? 0, is: true });
           else onChange({ type: 'days', days: [1, 2, 3, 4, 5] });
         }}
       >
         <option value="state">A device is…</option>
         {(choices.groups.length > 0 || c.type === 'group') && <option value="group">A light group is…</option>}
+        {(sensorGroups.length > 0 || c.type === 'sensors') && <option value="sensors">A sensor group is…</option>}
+        {(checks.length > 0 || c.type === 'check') && <option value="check">A check is…</option>}
         <option value="time">Time is between…</option>
         <option value="days">Day is…</option>
         <option value="sun">It is dark or light…</option>
@@ -116,6 +122,40 @@ export function ConditionEditor({ condition: c, choices, onChange }: { condition
             <option value="off">off (all lights off)</option>
             <option value="partly">partly on (some on, some off)</option>
             <option value="on">on (all lights on)</option>
+          </select>
+        </>
+      )}
+      {c.type === 'sensors' && (() => {
+        const w = sensorGroups.find((g) => g.id === c.group)?.words ?? { active: 'on', inactive: 'off' };
+        return (
+          <>
+            <select className="form-select form-select-sm" aria-label="Sensor group" value={c.group} onChange={(e) => onChange({ ...c, group: Number(e.target.value) })} style={{ width: 'auto' }}>
+              {sensorGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+            <select className="form-select form-select-sm" aria-label="Sensor group state" value={c.is} onChange={(e) => onChange({ ...c, is: e.target.value as 'none' | 'some' | 'all' })} style={{ width: 'auto' }}>
+              <option value="none">all {w.inactive}</option>
+              <option value="some">some {w.active}</option>
+              <option value="all">all {w.active}</option>
+            </select>
+          </>
+        );
+      })()}
+      {c.type === 'check' && (
+        <>
+          <select className="form-select form-select-sm" aria-label="Check" value={c.check} onChange={(e) => onChange({ ...c, check: Number(e.target.value) })} style={{ width: 'auto' }}>
+            {checks.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.name}
+              </option>
+            ))}
+          </select>
+          <select className="form-select form-select-sm" aria-label="True or false" value={String(c.is)} onChange={(e) => onChange({ ...c, is: e.target.value === 'true' })} style={{ width: 'auto' }}>
+            <option value="true">true</option>
+            <option value="false">false</option>
           </select>
         </>
       )}

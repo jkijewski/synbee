@@ -16,7 +16,7 @@ SynBee runs on a Synology NAS that is always on. It must install, start, stop, u
 - **INFO is generated and checked by the build:**
   - the required fields are always present, and deprecated fields are refused;
   - the name, description and change log are in English (the change log is the first section of `CHANGELOG.md`);
-  - the package is marked beta until its first release accepted into Package Center;
+  - released versions are not marked beta;
   - maintainer, distributor, website, support and help links come from `package/synbee-spk/package-info.conf`.
 - **Licences travel inside the payload,** with `THIRD-PARTY-NOTICES.txt` and the GPL sources ([0019](0019-licensing.md)). There is no `LICENSE` at the SPK's root, because Package Center would turn it into an extra agreement step; the wizard's disclaimer step takes its place.
 

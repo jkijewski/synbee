@@ -7,7 +7,7 @@ How a release is made, and what Synology's Package Center submission asks for, r
 - **GitHub releases:** the `.spk` files (x86_64 and armv8) with their `.sha256`, installed by hand in Package Center → Manual install. Needs nobody's approval; users update by installing the next file. DSM shows a warning that the package isn't from Synology, which the user accepts.
 - **Synology's Package Center:** submitted through Synology's developer programme and reviewed by Synology; users then find, install and update SynBee in Package Center itself. Slower, and a package published as free must stay free.
 
-Both use the same `.spk`. Set `BETA="no"` in `package/synbee-spk/package-info.conf` for the first release accepted into Package Center.
+Both use the same `.spk`. The package is not marked beta (`BETA="no"` in `package/synbee-spk/package-info.conf`).
 
 ## Making a release
 

@@ -1,0 +1,9 @@
+{
+  "name": "synbee-zigbee2mqtt",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pinned Zigbee2MQTT bundled in the SynBee package. Update by changing the version here and running npm install.",
+  "dependencies": {
+    "zigbee2mqtt": "2.14.3"
+  }
+}

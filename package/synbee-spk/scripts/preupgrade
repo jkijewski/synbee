@@ -1,0 +1,19 @@
+#!/bin/sh
+# Before an upgrade (the package is stopped): a copy of every gateway's Zigbee2MQTT data (network key, device database,
+# coordinator backup), so a failed upgrade or a downgrade has a way back. The last 3 per gateway are kept, in the
+# private folder. The hub copies its own database before migrating it (db.ts).
+set -eu
+. "$(dirname "$0")/common.sh"
+SNAP="$PKGVAR/snapshots"
+mkdir -p "$SNAP"
+chmod 700 "$SNAP"
+from="${SYNOPKG_OLD_PKGVER:-unknown}"
+stamp=$(date -u +%Y%m%dT%H%M%S)
+for dir in "$PKGVAR"/zigbee2mqtt "$PKGVAR"/zigbee2mqtt-[0-9]; do
+    [ -d "$dir" ] || continue
+    name=$(basename "$dir")
+    cp -a "$dir" "$SNAP/$name.before-$from-$stamp" || { log_err "Could not copy $name before the upgrade; nothing was changed."; exit 1; }
+    # Keep the newest 3 copies of this gateway's data.
+    ls -1dt "$SNAP/$name.before-"* 2>/dev/null | tail -n +4 | while IFS= read -r old; do rm -rf -- "$old"; done
+done
+exit 0

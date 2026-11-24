@@ -1,0 +1,17 @@
+[synbee_internal]
+title="SynBee (home network)"
+desc="SynBee web interface and automations. Allow from the home network only."
+port_forward="no"
+dst.ports="@INTERNAL@/tcp"
+
+[synbee_app]
+title="SynBee (phone app)"
+desc="SynBee phone app API over TLS. Forward it on the router only to use the app away from home (App users page), never the web interface's port."
+port_forward="yes"
+dst.ports="@APP@/tcp"
+
+[synbee_mqtt]
+title="SynBee (internal messages)"
+desc="Messages between SynBee and its Zigbee2MQTT, on this NAS only (127.0.0.1). Never open or forward it."
+port_forward="no"
+dst.ports="18830/tcp"

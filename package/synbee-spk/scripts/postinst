@@ -1,0 +1,13 @@
+#!/bin/sh
+# Saves the wizard settings on a fresh install and applies the ports to the DSM menu entry and firewall definition.
+set -eu
+. "$(dirname "$0")/common.sh"
+if [ "${SYNOPKG_PKG_STATUS:-}" != "UPGRADE" ] && [ -n "${wizard_data_share:-}" ]; then
+    umask 077
+    printf 'DATA_SHARE=%s\nINTERNAL_PORT=%s\nAPP_PORT=%s\nCOORDINATOR=%s\n' \
+        "$wizard_data_share" "$wizard_internal_port" "$wizard_app_port" "${wizard_coordinator:-}" > "$CONFIG"
+fi
+load_config || { log_err "Missing or invalid settings in $CONFIG."; exit 1; }
+apply_ports
+request_password_reset
+exit 0

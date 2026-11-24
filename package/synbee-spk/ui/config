@@ -1,0 +1,16 @@
+{
+  ".url": {
+    "synbee": {
+      "type": "url",
+      "title": "SynBee",
+      "desc": "Zigbee devices, actions and automations",
+      "icon": "images/icon_{0}.png",
+      "protocol": "http",
+      "port": "8090",
+      "url": "/",
+      "allUsers": false,
+      "grantPrivilege": "local",
+      "advanceGrantPrivilege": true
+    }
+  }
+}

@@ -1,0 +1,1022 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SynBee app API",
+    "version": "1",
+    "summary": "The API the SynBee mobile app uses to talk to a SynBee hub.",
+    "description": "Served by the hub on its own port (8443 by default) over TLS with the hub's own key, which the app pins by its SHA-256 SPKI fingerprint from pairing, instead of certificate authorities. Reachable from the home network, and from outside when the owner allows it. Answers are JSON and never cached. Breaking changes get a new version prefix. Generated from hub/src/app-api-schema.ts; don't edit by hand.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    },
+    "contact": {
+      "name": "Jacek Kijewski",
+      "email": "jacek.kijewski.gdynia@gmail.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://{host}:{port}",
+      "variables": {
+        "host": {
+          "default": "192.168.1.20"
+        },
+        "port": {
+          "default": "8443"
+        }
+      }
+    }
+  ],
+  "security": [
+    {
+      "phoneToken": []
+    }
+  ],
+  "paths": {
+    "/api/app/v1/ping": {
+      "get": {
+        "operationId": "ping",
+        "summary": "Check that an address is a SynBee hub",
+        "description": "Says which API version the hub speaks, before pairing. Nothing about members or devices. Accepted from anywhere.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "hub": {
+                      "type": "string",
+                      "const": "synbee"
+                    },
+                    "api": {
+                      "type": "integer",
+                      "description": "The app API version, 1"
+                    },
+                    "version": {
+                      "type": "string",
+                      "description": "SynBee's version"
+                    }
+                  },
+                  "required": [
+                    "hub",
+                    "api",
+                    "version"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/pair": {
+      "post": {
+        "operationId": "pair",
+        "summary": "Pair this phone with a one-time code",
+        "description": "The code comes from the hub's App users page (QR code or typed), is valid once and for 10 minutes. Accepted from anywhere; at most 10 attempts a minute per address. The token is returned only here; the hub keeps only its hash.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "The pairing code, e.g. K7M4Q-X92PA"
+                  },
+                  "phoneName": {
+                    "type": "string",
+                    "description": "Shown on the App users page, e.g. \"Pixel 8\""
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "The phone token, sent as `Authorization: Bearer <token>`"
+                    },
+                    "member": {
+                      "type": "string",
+                      "description": "The member's name"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "description": "The phone's name"
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "member",
+                    "phone"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/connection": {
+      "get": {
+        "operationId": "connection",
+        "summary": "Where the phone can reach the hub",
+        "description": "The hub's home addresses and, when the owner allows the app away from home for this phone, the outside address.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "home": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "host:port"
+                      },
+                      "description": "The hub's home network addresses"
+                    },
+                    "outside": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "description": "host:port"
+                      },
+                      "description": "The outside address, when this phone may use it"
+                    },
+                    "outsideAllowed": {
+                      "type": "boolean",
+                      "description": "Whether this phone may be used away from home"
+                    },
+                    "hubAllowsOutside": {
+                      "type": "boolean",
+                      "description": "Whether the hub accepts the app away from home at all"
+                    }
+                  },
+                  "required": [
+                    "home",
+                    "outside",
+                    "outsideAllowed",
+                    "hubAllowsOutside"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/me": {
+      "get": {
+        "operationId": "me",
+        "summary": "Who this phone is",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "member": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string"
+                    },
+                    "hubVersion": {
+                      "type": "string"
+                    },
+                    "actions": {
+                      "type": "integer",
+                      "description": "How many actions the member may run"
+                    },
+                    "rooms": {
+                      "type": "integer",
+                      "description": "How many rooms the member may see"
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "phone",
+                    "hubVersion",
+                    "actions",
+                    "rooms"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/actions": {
+      "get": {
+        "operationId": "actions",
+        "summary": "The actions the member may run",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string",
+                        "description": "A Material Symbols icon name"
+                      },
+                      "description": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "icon",
+                      "description"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/home": {
+      "get": {
+        "operationId": "home",
+        "summary": "The app's home screen: the member's rooms and actions, with their state",
+        "description": "Rooms in the owner's order with their colours. An action is listed under each allowed room of its devices; one with no rooms is in none (\"Other\" in the app); one whose rooms are all taken away isn't listed.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rooms": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Room"
+                      }
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "icon": {
+                            "type": "string",
+                            "description": "A Material Symbols icon name"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "rooms": {
+                            "type": "array",
+                            "items": {
+                              "type": "integer"
+                            },
+                            "description": "The ids of the rooms it is listed under"
+                          },
+                          "state": {
+                            "$ref": "#/components/schemas/ActionState"
+                          },
+                          "power": {
+                            "$ref": "#/components/schemas/Power"
+                          },
+                          "status": {
+                            "type": "string",
+                            "description": "The tile's line, e.g. \"Off\" or \"2 of 3 on\""
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "icon",
+                          "description",
+                          "rooms",
+                          "state",
+                          "power",
+                          "status"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "rooms",
+                    "actions"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/actions/{id}/details": {
+      "get": {
+        "operationId": "actionDetails",
+        "summary": "What an action touches, device by device",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The action's id; anything else answers 404",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "$ref": "#/components/schemas/ActionState"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "device"
+                              },
+                              "device": {
+                                "$ref": "#/components/schemas/Device"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "device"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "group"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "devices": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/Device"
+                                }
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "name",
+                              "summary",
+                              "devices"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "state",
+                    "status",
+                    "targets"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not allowed for this member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/rooms/{id}": {
+      "get": {
+        "operationId": "room",
+        "summary": "A room's devices, in words",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The room's id; anything else answers 404",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "icon": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string",
+                      "description": "#rrggbb"
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Device"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "icon",
+                    "color",
+                    "devices"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not allowed for this member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/app/v1/actions/{id}/run": {
+      "post": {
+        "operationId": "runAction",
+        "summary": "Run an action",
+        "description": "Drafts and actions the member may not run answer 404, like missing ones.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The action's id; anything else answers 404",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "failedStep": {
+                      "type": "integer",
+                      "description": "The step that failed, from 1"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the phone was revoked: pair again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "From outside the home network while not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found, or not allowed for this member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests; see Retry-After",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong, in words to show the user"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "ActionState": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "active",
+          "partly",
+          "inactive",
+          null
+        ],
+        "description": "Whether the action's devices show what it sets; null when unknown"
+      },
+      "Power": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "enum": [
+          "on",
+          "partly",
+          "off",
+          null
+        ],
+        "description": "How the tile is coloured: what the action switches is on, partly on or off; null when it shows nothing"
+      },
+      "Reading": {
+        "type": "object",
+        "properties": {
+          "property": {
+            "type": "string",
+            "description": "The device's property, as Zigbee2MQTT names it"
+          },
+          "label": {
+            "type": "string",
+            "description": "Its name in words, e.g. \"Temperature\""
+          },
+          "text": {
+            "type": "string",
+            "description": "Its value in words, e.g. \"21.4 °C\" or \"Open\""
+          },
+          "attention": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "alarm",
+              "warning",
+              null
+            ],
+            "description": "Whether the value needs attention"
+          }
+        },
+        "required": [
+          "property",
+          "label",
+          "text",
+          "attention"
+        ],
+        "additionalProperties": false
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "ieee": {
+            "type": "string",
+            "description": "The device's IEEE address"
+          },
+          "name": {
+            "type": "string"
+          },
+          "room": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The room it is in"
+          },
+          "online": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether it answers; null when unknown"
+          },
+          "summary": {
+            "type": "string",
+            "description": "\"On · red · 30 %\", \"21.4 °C · 48 %\", or empty when nothing is known"
+          },
+          "readings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Reading"
+            }
+          },
+          "battery": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Battery level in %"
+          },
+          "lastSeen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When it was last heard from (ISO 8601)"
+          }
+        },
+        "required": [
+          "ieee",
+          "name",
+          "room",
+          "online",
+          "summary",
+          "readings",
+          "battery",
+          "lastSeen"
+        ],
+        "additionalProperties": false
+      },
+      "Room": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "description": "A Material Symbols icon name"
+          },
+          "color": {
+            "type": "string",
+            "description": "The room's colour, #rrggbb"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "color"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "phoneToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The token from POST /pair"
+      }
+    }
+  }
+}

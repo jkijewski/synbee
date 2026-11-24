@@ -1,0 +1,46 @@
+{
+  "name": "synbee",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "description": "SynBee: self-hosted Zigbee hub for Synology DSM",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13 <23"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build --config web/vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json",
+    "test": "vitest run",
+    "start": "node --disable-warning=ExperimentalWarning dist/index.js",
+    "sim": "node --disable-warning=ExperimentalWarning dist/sim/cli.js",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev": "npm run build && SIM=1 HUB_DATA=.dev-data node supervisor/supervisor.mjs",
+    "openapi": "tsc -p tsconfig.json && node dist/tools/write-openapi.js"
+  },
+  "dependencies": {
+    "@peculiar/x509": "3.1.0",
+    "aedes": "1.2.0",
+    "fastify": "5.12.8",
+    "mqtt": "5.16.1",
+    "multicast-dns": "7.2.5",
+    "reflect-metadata": "0.2.2"
+  },
+  "devDependencies": {
+    "@types/multicast-dns": "7.2.4",
+    "@types/node": "22.20.5",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.2.1",
+    "bootstrap": "5.3.8",
+    "material-symbols": "0.48.3",
+    "qrcode": "1.5.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "typescript": "7.0.2",
+    "uplot": "1.6.32",
+    "vite": "8.3.6",
+    "vitest": "5.1.0"
+  }
+}

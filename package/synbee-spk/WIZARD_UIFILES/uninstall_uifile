@@ -1,0 +1,34 @@
+[
+  {
+    "step_title": "Keep or delete the hub's data",
+    "items": [
+      {
+        "type": "singleselect",
+        "desc": "The 'synbee' folder in the chosen shared folder holds your devices, actions and automations. Keys are kept separately by the package and deleted with the data.",
+        "subitems": [
+          {
+            "key": "wizard_keep_data",
+            "desc": "Keep data (recommended): reinstalling picks up where you left off",
+            "defaultValue": true
+          },
+          {
+            "key": "wizard_delete_data",
+            "desc": "Delete data permanently: every device must then be paired again",
+            "defaultValue": false
+          }
+        ]
+      },
+      {
+        "type": "textfield",
+        "desc": "To delete, also type DELETE below. Otherwise data is kept. The shared folder itself is never deleted.",
+        "subitems": [
+          {
+            "key": "wizard_delete_confirm",
+            "desc": "Confirmation",
+            "defaultValue": ""
+          }
+        ]
+      }
+    ]
+  }
+]

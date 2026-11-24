@@ -1,0 +1,15 @@
+{
+  "data-share": {
+    "shares": [
+      {
+        "name": "{{wizard_data_share}}",
+        "permission": {
+          "rw": ["synbee"]
+        }
+      }
+    ]
+  },
+  "port-config": {
+    "protocol-file": "synbee.sc"
+  }
+}

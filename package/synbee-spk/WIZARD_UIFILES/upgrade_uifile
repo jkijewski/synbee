@@ -1,0 +1,23 @@
+[
+  {
+    "step_title": "Admin password",
+    "items": [
+      {
+        "type": "singleselect",
+        "desc": "Only if you've forgotten the hub's admin password: reset it, so the hub asks for a new one. Devices, actions and automations are kept.",
+        "subitems": [
+          {
+            "key": "wizard_keep_password",
+            "desc": "Keep the current password",
+            "defaultValue": true
+          },
+          {
+            "key": "wizard_reset_password",
+            "desc": "Reset the hub's admin password",
+            "defaultValue": false
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Validates wizard values without changing anything.
+set -eu
+. "$(dirname "$0")/common.sh"
+[ "${SYNOPKG_PKG_STATUS:-}" = "UPGRADE" ] && exit 0
+
+valid_share "${wizard_data_share:-}" || { log_err "Invalid shared folder name."; exit 1; }
+valid_port "${wizard_internal_port:-}" || { log_err "Invalid web interface port. Use 1025 to 65535."; exit 1; }
+valid_port "${wizard_app_port:-}" || { log_err "Invalid phone app port. Use 1025 to 65535."; exit 1; }
+[ "$wizard_internal_port" != "$wizard_app_port" ] || { log_err "The two ports must differ."; exit 1; }
+valid_coordinator "${wizard_coordinator:-}" || { log_err "Invalid coordinator address. Use host:port."; exit 1; }
+for p in "$wizard_internal_port" "$wizard_app_port" "$MQTT_PORT"; do
+    if port_in_use "$p"; then
+        log_err "Port $p is already in use on this NAS. Choose another."
+        exit 1
+    fi
+done
+exit 0

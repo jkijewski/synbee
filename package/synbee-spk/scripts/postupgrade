@@ -1,0 +1,8 @@
+#!/bin/sh
+# Settings and data carry over; only files in the new target need the ports again.
+set -eu
+. "$(dirname "$0")/common.sh"
+load_config || { log_err "Missing or invalid settings in $CONFIG."; exit 1; }
+apply_ports
+request_password_reset
+exit 0

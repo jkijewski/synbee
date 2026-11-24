@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+. "$(dirname "$0")/common.sh"
+
+case "${1:-}" in
+    start)
+        supervisor_running && exit 0
+        load_config || { echo "Missing or invalid settings in $CONFIG." >&2; exit 1; }
+        DATA="$(data_dir)"
+        mkdir -p -- "$DATA" "$PKGVAR/logs"
+        mkdir -m 700 -p -- "$PKGVAR/secrets"
+        HUB_DATA="$DATA" HUB_LOG_DIR="$PKGVAR/logs" HUB_SECRETS_DIR="$PKGVAR/secrets" \
+        HUB_INTERNAL_PORT="$INTERNAL_PORT" HUB_APP_PORT="$APP_PORT" \
+        HUB_MQTT_PORT="$MQTT_PORT" HUB_COORDINATOR="$COORDINATOR" HUB_Z2M_DATA="$PKGVAR/zigbee2mqtt" \
+            nohup "$PKGDEST/node/bin/node" "$PKGDEST/hub/supervisor/supervisor.mjs" >> "$PKGVAR/logs/start.log" 2>&1 &
+        echo $! > "$PIDFILE"
+        sleep 2
+        if ! supervisor_running; then
+            # The package's own logs aren't reachable without SSH, so copy the start errors where the owner can read them.
+            tail -n 60 "$PKGVAR/logs/start.log" "$PKGVAR/logs/supervisor.log" > "$DATA/start-error.log" 2>/dev/null || true
+            echo "The hub failed to start; see start-error.log in the data folder." >&2
+            exit 1
+        fi
+        rm -f -- "$DATA/start-error.log"
+        exit 0
+        ;;
+    stop)
+        if supervisor_running; then
+            pid=$(cat "$PIDFILE")
+            kill -TERM "$pid" 2>/dev/null || true
+            i=0
+            while [ -d "/proc/$pid" ] && [ "$i" -lt 30 ]; do
+                sleep 1
+                i=$((i + 1))
+            done
+            [ -d "/proc/$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+        fi
+        rm -f -- "$PIDFILE"
+        exit 0
+        ;;
+    status)
+        supervisor_running && exit 0
+        exit 3
+        ;;
+    prestart|prestop)
+        exit 0
+        ;;
+    *)
+        printf 'Usage: %s {start|stop|status}\n' "$0" >&2
+        exit 64
+        ;;
+esac

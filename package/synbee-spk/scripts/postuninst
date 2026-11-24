@@ -1,0 +1,23 @@
+#!/bin/sh
+# Keeps data unless the owner chose deletion and typed DELETE. Never touches the shared folder itself.
+set -eu
+. "$(dirname "$0")/common.sh"
+[ "${SYNOPKG_PKG_STATUS:-}" = "UNINSTALL" ] || exit 0
+if [ "${wizard_delete_data:-false}" = "true" ] && [ "${wizard_delete_confirm:-}" = "DELETE" ] && load_config; then
+    link="$(data_dir)"
+    target=$(readlink -f "$link" || true)
+    case "$target" in
+        /volume[0-9]*/*/"$PKG")
+            if [ -d "$target" ] && [ ! -L "$link" ]; then
+                rm -rf -- "$target"
+                echo "Deleted $target"
+            fi
+            ;;
+        *) echo "Refusing to delete unexpected path: '$target'" ;;
+    esac
+    rm -rf -- "$PKGVAR/secrets" "$PKGVAR/zigbee2mqtt" "$PKGVAR/zigbee2mqtt.moving"
+    rm -f -- "$CONFIG"
+else
+    load_config && echo "Data kept in shared folder '$DATA_SHARE', folder '$PKG'."
+fi
+exit 0

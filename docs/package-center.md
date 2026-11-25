@@ -4,7 +4,7 @@ How a release is made, and what Synology's Package Center submission asks for, r
 
 ## Two ways to publish
 
-- **GitHub releases:** the `.spk` files (x86_64 and armv8) with their `.sha256`, installed by hand in Package Center → Manual install. Needs nobody's approval; users update by installing the next file. DSM shows a warning that the package isn't from Synology, which the user accepts.
+- **GitHub releases:** the x86_64 `.spk` with its `.sha256`, installed by hand in Package Center → Manual install. Needs nobody's approval; users update by installing the next file. DSM shows a warning that the package isn't from Synology, which the user accepts.
 - **Synology's Package Center:** submitted through Synology's developer programme and reviewed by Synology; users then find, install and update SynBee in Package Center itself. Slower, and a package published as free must stay free.
 
 Both use the same `.spk`. The package is not marked beta (`BETA="no"` in `package/synbee-spk/package-info.conf`).
@@ -14,18 +14,18 @@ Both use the same `.spk`. The package is not marked beta (`BETA="no"` in `packag
 1. Update [CHANGELOG.md](../CHANGELOG.md): the first section becomes the package's change log in Package Center.
 2. Raise `version` in `hub/package.json` for a new release; the build number in the package version only goes up.
 3. `cd hub && npm ci && npm test && npm run typecheck`, and check `openapi/app-api.json` is current (the tests do).
-4. Build both architectures: `package/synbee-spk/build.sh 1.0.0-NNNN x86_64` and `… armv8`.
+4. Build: `package/synbee-spk/build.sh X.Y.Z-NNNN x86_64` (for example `1.1.0-0081`). An armv8 build also works (`… armv8`), but it is untested on hardware, so it is not published.
 5. Test as in [Building and testing](building.md#testing-a-package): Virtual DSM first (install, upgrade from the previous release, uninstall keeping and deleting data, Security Advisor), then a real NAS with a real coordinator after downloading a coordinator backup.
-6. Tag the commit `v1.0.0` and publish the `.spk`, `.sha256` and `.build` files.
+6. Tag the commit `vX.Y.Z` (for example `v1.1.0`) and publish the x86_64 `.spk`, `.sha256` and `.build` files.
 
 ## Package Center submission
 
 | Field | Value |
 | --- | --- |
 | Package name | SynBee (`synbee`) |
-| Version | from the build, e.g. 1.0.0-0071 |
+| Version | from the build, e.g. 1.1.0-0081 |
 | Category | Utilities (or Home automation if offered) |
-| Architectures | x86_64; armv8 built but untested |
+| Architectures | x86_64 only. Submit only the x86_64 `.spk`; armv8 builds but is untested and not published |
 | Minimum DSM | 7.2-64570 |
 | Developer / maintainer | Jacek Kijewski |
 | Website | https://github.com/jkijewski/synbee |

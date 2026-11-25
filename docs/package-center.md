@@ -63,3 +63,18 @@ Point to [docs/installation.md](installation.md): installing, first steps with t
 5. Upgrade from the previous version: devices, rooms, actions and settings stay; Status → Upgrades and safety copies lists the copy taken before migrating.
 6. Uninstall keeping data (the default), reinstall: everything is back. Uninstall choosing "Delete data permanently" and typing DELETE: SynBee's data is removed; the shared folder itself is never deleted.
 7. Security Advisor and Antivirus Essential: clean.
+
+## Checks done for 1.1.0
+
+On 25 November 2026, on Virtual DSM (DSM 7.2.2-72806, `x86_64`), with the published `synbee-1.1.0-0081-x86_64.spk` (sha256 checked). The test VM's coordinator address points at nothing, so it never reaches a real gateway.
+
+| Check | Result |
+| --- | --- |
+| Upgrade 0.2.0-0034 → 1.0.0-0073 → 1.1.0-0081 (Manual install, "Keep the current password") | Both upgrades succeeded and the package was running after each. The hub answered `"version":"1.1.0"`. A safety copy was taken before each migration (`hub.db.before-v13-…`, `hub.db.before-v19-…`), and the hub data stayed in place. |
+| Security Advisor, full scan | All categories safe (malware, network, security settings, system, update, user info), no findings. |
+| Antivirus Essential 1.5.7, definitions of 25.11.2026, full scan | 31,603 files scanned, no viruses found, nothing quarantined. |
+| DSM system log | Only "successfully stopped / started / updated / uninstalled" entries for SynBee. No error or warning entries since 8 November (those came from an early prototype package). |
+| Uninstall with "Delete data permanently" and DELETE typed | Package removed. The `synbee` folder inside the shared folder was deleted, and the shared folder itself was kept, empty. Ports 8090 and 8443 no longer answer, and DSM's port list has no SynBee entries. |
+| AppArmor denials and core dumps | Not checked. They need a root shell on the VM; DSM only lets a root task be created after the account password is entered, and the test machine has no SSH set up. Check these before the next release with SSH on the test VM (`dmesg \| grep -i apparmor`, `/var/crash`). |
+
+Zigbee2MQTT restarted repeatedly on the test VM, as expected, because there is no coordinator at its address. On a fresh install with no address, it isn't started.

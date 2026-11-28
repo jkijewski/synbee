@@ -162,7 +162,7 @@ async function main(): Promise<void> {
 
   const rooms = new Rooms(db);
   const actionRooms = () =>
-    new DependencyIndex(loadIndexInput(db, { actions: actions.list(), rules: rules.list(), groups: groups.list() })).roomMembership(rooms.list()).actions;
+    new DependencyIndex(loadIndexInput(db, { actions: actions.list(), rules: rules.list(), groups: groups.list(), sensorGroups: sensorGroups.list(), checks: checks.list() })).roomMembership(rooms.list()).actions;
   const views = new DeviceViews(db, sources, groups, rooms);
   const appSettings = new Settings(db);
   const appApi = buildAppServer({

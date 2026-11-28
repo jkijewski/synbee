@@ -2,6 +2,10 @@
 
 Package versions are `X.Y.Z-NNNN`: the release, and a build number that only goes up.
 
+## 1.1.1 (28 November 2026)
+
+- Automations and actions that use a check or a sensor group are listed under the rooms of the devices behind it and the room it's shown in, instead of "Not assigned"
+
 ## 1.1.0 (24 November 2026)
 
 - Sensor groups: several yes/no sensors read as one state in your own words ("All closed", "2 of 5 open: Kitchen, Hall")

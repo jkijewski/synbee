@@ -71,7 +71,7 @@ Every other route SHALL need `Authorization: Bearer <token>` of a paired, unrevo
 - **THEN** the answer is 404, as for a missing action
 
 ### Requirement: Home screen by room
-`GET /api/app/v1/home` SHALL return the member's allowed rooms that have actions or status tiles, in the owner's order, each with its name, icon and colour (the same colour as in the web interface), and the member's actions with their icon and the allowed rooms they belong to. An action belongs to the rooms of the devices it uses; one that uses no room's devices SHALL have no rooms (the app shows it under "Other"); one whose rooms are all revoked for the member SHALL NOT be listed.
+`GET /api/app/v1/home` SHALL return the member's allowed rooms that have actions or status tiles, in the owner's order, each with its name, icon and colour (the same colour as in the web interface), and the member's actions with their icon and the allowed rooms they belong to. An action belongs to the rooms of the devices it uses, including through its "Only when" conditions' light groups, sensor groups and checks, and to the rooms those sensor groups and checks are shown in; one that uses no room's devices SHALL have no rooms (the app shows it under "Other"); one whose rooms are all revoked for the member SHALL NOT be listed.
 
 #### Scenario: A revoked room
 - **GIVEN** "Wieczór" uses a light in "Salon", and "Wszystko off" uses lights in "Salon" and "Garaż"

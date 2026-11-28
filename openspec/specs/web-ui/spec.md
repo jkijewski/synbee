@@ -35,7 +35,7 @@ Deleting a device, a light group or an action SHALL first show what uses it dire
 - **THEN** the warning names that automation before anything is deleted
 
 ### Requirement: Actions and automations by room
-The Actions and Automations lists SHALL be grouped by room like the device list, in the rooms' order. An action or automation SHALL appear under every room of the devices it uses, whether as trigger, condition or target, directly or through a light group or an action, and SHALL show those rooms as links when there is more than one. One that uses no device SHALL appear under "Not assigned". Actions and automations SHALL NOT be moved between rooms; their devices' rooms decide.
+The Actions and Automations lists SHALL be grouped by room like the device list, in the rooms' order. An action or automation SHALL appear under every room of the devices it uses, whether as trigger, condition or target, directly or through a light group, sensor group, check or action, and under the room a sensor group or check it uses is shown in; it SHALL show those rooms as links when there is more than one. One that uses no device and no sensor group or check with a room SHALL appear under "Not assigned". Actions and automations SHALL NOT be moved between rooms; their devices' rooms decide.
 
 #### Scenario: Remote button rule
 - **GIVEN** a rule where the Wireless Switch in "gabinet" runs an action switching "biurko robocze" in "gabinet"

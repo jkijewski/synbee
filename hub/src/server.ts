@@ -123,7 +123,7 @@ export function buildInternalServer(deps: InternalServerDeps): FastifyInstance {
       return { icon: chosen.icon ?? auto, autoIcon: auto, iconChosen: Boolean(chosen.icon) };
     },
     labelsOf: (ieee) => devices.labels(ieee),
-    dependencyIndex: () => new DependencyIndex(loadIndexInput(db, { actions: actions.list(), rules: rules.list(), groups: groups.list() })),
+    dependencyIndex: () => new DependencyIndex(loadIndexInput(db, { actions: actions.list(), rules: rules.list(), groups: groups.list(), sensorGroups: sensorGroups.list(), checks: checks.list() })),
   };
 
   registerAuthRoutes(app, ctx);

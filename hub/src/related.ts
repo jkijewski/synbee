@@ -3,9 +3,13 @@ import { Devices } from './devices.js';
 import type { Action } from './actions.js';
 import type { Condition, Rule } from './rules.js';
 import type { LightGroup } from './groups.js';
+import type { Check } from './checks.js';
+import type { SensorGroup } from './sensor-groups.js';
 
 // One dependency index over devices, light groups, actions and rules (0013). Every "Related" list and every
-// "this is used by" warning is read from it, so they always agree.
+// "this is used by" warning is read from it, so they always agree. Sensor groups and checks (0024) aren't items
+// of their own here: a trigger or condition on one counts as an indirect use of the devices behind it, and the
+// room it shows in counts for room membership.
 
 export type Role = 'trigger' | 'condition' | 'target' | 'member';
 export interface Link {
@@ -48,6 +52,8 @@ export interface IndexInput {
   groups: Array<Pick<LightGroup, 'id' | 'name' | 'members' | 'plannedMembers' | 'created'>>;
   actions: Action[];
   rules: Rule[];
+  sensorGroups?: Array<Pick<SensorGroup, 'id' | 'name' | 'roomId' | 'members'>>;
+  checks?: Array<Pick<Check, 'id' | 'name' | 'roomId' | 'if'>>;
 }
 
 type Key = string; // "device:0x…", "group:1", "action:2", "rule:3"
@@ -67,6 +73,8 @@ export class DependencyIndex {
   private readonly edges: Edge[] = [];
   private readonly names = new Map<Key, string>();
   private readonly input: IndexInput;
+  /** Rooms an action or rule is in through the sensor groups and checks it uses, keyed "action:1" / "rule:2". */
+  private readonly ownRooms = new Map<Key, Set<number>>();
 
   constructor(input: IndexInput) {
     this.input = input;
@@ -86,14 +94,41 @@ export class DependencyIndex {
         if (st.kind === 'group') this.edges.push({ from: act(a.id), to: grp(st.group), role: 'target' });
       }
     }
-    const condition = (r: Rule, c: Condition | undefined) => {
-      if (c?.type === 'state') this.edges.push({ from: rul(r.id), to: dev(c.device), role: 'condition' });
-      if (c?.type === 'group') this.edges.push({ from: rul(r.id), to: grp(c.group), role: 'condition' });
+    // A sensor group or check stands for the devices behind it: indirect links, never "used by" for deleting.
+    const sensorGroup = (from: Key, id: number, role: Role, via: string) => {
+      const sg = input.sensorGroups?.find((x) => x.id === id);
+      if (!sg) return;
+      if (sg.roomId != null) this.addRoom(from, sg.roomId);
+      for (const m of sg.members) this.edges.push({ from, to: dev(m.ieee), role, via: `${via}sensor group ${sg.name}` });
     };
+    const check = (from: Key, id: number, role: Role) => {
+      const ck = input.checks?.find((x) => x.id === id);
+      if (!ck) return;
+      if (ck.roomId != null) this.addRoom(from, ck.roomId);
+      const via = `check ${ck.name}`;
+      for (const c of ck.if.conditions) {
+        if (c.type === 'state') this.edges.push({ from, to: dev(c.device), role, via });
+        if (c.type === 'group') {
+          const g = input.groups.find((x) => x.id === c.group);
+          for (const m of g ? (g.created ? g.members : g.plannedMembers) : []) this.edges.push({ from, to: dev(m.ieee), role, via: `${via}, light group ${g!.name}` });
+        }
+        if (c.type === 'sensors') sensorGroup(from, c.group, role, `${via}, `);
+      }
+    };
+    const usesCondition = (from: Key, c: Condition | undefined) => {
+      if (c?.type === 'state') this.edges.push({ from, to: dev(c.device), role: 'condition' });
+      if (c?.type === 'group') this.edges.push({ from, to: grp(c.group), role: 'condition' });
+      if (c?.type === 'sensors') sensorGroup(from, c.group, 'condition', '');
+      if (c?.type === 'check') check(from, c.check, 'condition');
+    };
+    const condition = (r: Rule, c: Condition | undefined) => usesCondition(rul(r.id), c);
+    for (const a of input.actions) a.if?.conditions.forEach((c) => usesCondition(act(a.id), c));
     for (const r of input.rules) {
       for (const t of r.when) {
         if (t.type === 'button' || t.type === 'state') this.edges.push({ from: rul(r.id), to: dev(t.device), role: 'trigger' });
         if (t.type === 'action') this.edges.push({ from: rul(r.id), to: act(t.action), role: 'trigger' });
+        if (t.type === 'sensors') sensorGroup(rul(r.id), t.group, 'trigger', '');
+        if (t.type === 'check') check(rul(r.id), t.check, 'trigger');
       }
       r.if.conditions.forEach((c) => condition(r, c));
       for (const step of r.then) {
@@ -122,6 +157,12 @@ export class DependencyIndex {
         }
       }
     }
+  }
+
+  private addRoom(from: Key, room: number) {
+    const set = this.ownRooms.get(from) ?? new Set<number>();
+    set.add(room);
+    this.ownRooms.set(from, set);
   }
 
   /** What is related to one device, group, action or rule, in both directions. */
@@ -200,8 +241,9 @@ export class DependencyIndex {
   }
 
   /**
-   * Which rooms each action, rule and light group belongs to: the rooms of the devices it uses (0012). They aren't
-   * placed in rooms themselves; their devices decide.
+   * Which rooms each action, rule and light group belongs to: the rooms of the devices it uses (0012), directly or
+   * through a light group, sensor group, check or action, plus the rooms its sensor groups and checks show in. They
+   * aren't placed in rooms themselves; what they use decides.
    */
   roomMembership(rooms: Array<{ id: number; devices: string[]; alsoDevices: string[] }>): {
     actions: Record<number, number[]>;
@@ -216,6 +258,13 @@ export class DependencyIndex {
       for (const g of r.groups) (groups[g.id] ??= []).push(room.id);
       for (const a of r.actions) (actions[a.id] ??= []).push(room.id);
       for (const x of r.rules) (rules[x.id] ??= []).push(room.id);
+    }
+    const known = new Set(rooms.map((r) => r.id));
+    for (const [key, ids] of this.ownRooms) {
+      const [kind, id] = key.split(':');
+      const into = kind === 'rule' ? rules : actions;
+      const list = (into[Number(id)] ??= []);
+      for (const room of ids) if (known.has(room) && !list.includes(room)) list.push(room);
     }
     return { actions, rules, groups };
   }
@@ -234,7 +283,10 @@ export class DependencyIndex {
   }
 }
 
-export function loadIndexInput(db: Db, deps: { actions: Action[]; rules: Rule[]; groups: IndexInput['groups'] }): IndexInput {
+export function loadIndexInput(
+  db: Db,
+  deps: { actions: Action[]; rules: Rule[]; groups: IndexInput['groups']; sensorGroups?: IndexInput['sensorGroups']; checks?: IndexInput['checks'] },
+): IndexInput {
   return {
     devices: [...new Devices(db).names()].map(([ieee, name]) => ({ ieee, name })),
     ...deps,
